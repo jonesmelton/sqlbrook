@@ -40,7 +40,6 @@ returning *
      where end_time is null
            ;
 
-
 --name: register-hit
 --fn: first
      with current

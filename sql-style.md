@@ -232,6 +232,11 @@ char_name text
    formatter is layout-only.
 4. **Placeholders**: all sqlite forms must be handled (`:name`, `@name`,
    `$name`, `?NNN`, bare `?`).
+5. **Statement separation** (resolved 2026-06-10, milestone 2): exactly one
+   blank line between statements, no blank lines at the start of a file, one
+   trailing newline at the end. Comment lines (`--`) belong to the statement
+   they precede. The leading blank in session.sql and the double blank in
+   bugshield.sql were oversights, fixed by promotion.
 
 The example corpus has been edited to conform; previously flagged
 inconsistencies are fixed.

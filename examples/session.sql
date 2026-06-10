@@ -1,4 +1,3 @@
-
 --name: new
 insert into sessions
           ( capname

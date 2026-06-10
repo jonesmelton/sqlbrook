@@ -100,53 +100,63 @@ rule token = parse
   let phrases =
     List.sort (fun a b -> compare (List.length b) (List.length a)) phrases
 
+  (* Each token carries its byte span in the source: (start, end) offsets.
+     Multi-word keywords span from the first word's start to the last word's
+     end. Spans let the skeleton emit passthrough statements as exact source
+     slices instead of re-rendered tokens. *)
   let assemble raws =
     let rec go toks acc =
       match toks with
       | [] -> List.rev acc
-      | RWord w :: rest ->
+      | (RWord w, (s, e)) :: rest ->
           let lw = String.lowercase_ascii w in
           let try_phrase phrase =
             match phrase with
             | first :: more when String.equal first lw ->
-                let rec eat needed toks =
+                let rec eat needed toks last_end =
                   match needed, toks with
-                  | [], toks -> Some toks
-                  | n :: ns, RWord w' :: ts
+                  | [], toks -> Some (toks, last_end)
+                  | n :: ns, (RWord w', (_, e')) :: ts
                     when String.equal n (String.lowercase_ascii w') ->
-                      eat ns ts
+                      eat ns ts e'
                   | _ -> None
                 in
-                (match eat more rest with
-                 | Some rest' -> Some (String.concat " " phrase, rest')
+                (match eat more rest e with
+                 | Some (rest', e') ->
+                     Some (String.concat " " phrase, rest', e')
                  | None -> None)
             | _ -> None
           in
           (match List.find_map try_phrase phrases with
-           | Some (kw, rest') -> go rest' (Token.Keyword kw :: acc)
+           | Some (kw, rest', e') ->
+               go rest' ((Token.Keyword kw, (s, e')) :: acc)
            | None ->
                if List.mem lw keywords
-               then go rest (Token.Keyword lw :: acc)
-               else go rest (Token.Ident w :: acc))
-      | RQuoted s :: rest -> go rest (Token.Quoted s :: acc)
-      | RNumber s :: rest -> go rest (Token.Number s :: acc)
-      | ROp s :: rest -> go rest (Token.Operator s :: acc)
-      | RPlaceholder s :: rest -> go rest (Token.Placeholder s :: acc)
-      | RLParen :: rest -> go rest (Token.LParen :: acc)
-      | RRParen :: rest -> go rest (Token.RParen :: acc)
-      | RComma :: rest -> go rest (Token.Comma :: acc)
-      | RSemicolon :: rest -> go rest (Token.Semicolon :: acc)
-      | RComment s :: rest -> go rest (Token.Comment s :: acc)
-      | REof :: rest -> go rest acc
+               then go rest ((Token.Keyword lw, (s, e)) :: acc)
+               else go rest ((Token.Ident w, (s, e)) :: acc))
+      | (RQuoted s, sp) :: rest -> go rest ((Token.Quoted s, sp) :: acc)
+      | (RNumber s, sp) :: rest -> go rest ((Token.Number s, sp) :: acc)
+      | (ROp s, sp) :: rest -> go rest ((Token.Operator s, sp) :: acc)
+      | (RPlaceholder s, sp) :: rest -> go rest ((Token.Placeholder s, sp) :: acc)
+      | (RLParen, sp) :: rest -> go rest ((Token.LParen, sp) :: acc)
+      | (RRParen, sp) :: rest -> go rest ((Token.RParen, sp) :: acc)
+      | (RComma, sp) :: rest -> go rest ((Token.Comma, sp) :: acc)
+      | (RSemicolon, sp) :: rest -> go rest ((Token.Semicolon, sp) :: acc)
+      | (RComment s, sp) :: rest -> go rest ((Token.Comment s, sp) :: acc)
+      | (REof, _) :: rest -> go rest acc
     in
     go raws []
 
-  let tokens_of_string (s : string) : Token.t list =
+  let tokens_with_spans (s : string) : (Token.t * (int * int)) list =
     let lexbuf = Lexing.from_string s in
     let rec loop acc =
       match token lexbuf with
       | REof -> List.rev acc
-      | r -> loop (r :: acc)
+      | r ->
+          loop ((r, (Lexing.lexeme_start lexbuf, Lexing.lexeme_end lexbuf)) :: acc)
     in
     assemble (loop [])
+
+  let tokens_of_string (s : string) : Token.t list =
+    List.map fst (tokens_with_spans s)
 }

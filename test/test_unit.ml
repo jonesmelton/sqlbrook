@@ -208,8 +208,37 @@ let%expect_test "invariant: lexer roundtrip over examples corpus" =
     |}]
 ;;
 
-let%expect_test "skeleton: select splits into clauses" =
-  ignore Skeleton.parse;
+let show_stmts src =
+  Skeleton.parse src (Lexer.tokens_with_spans src)
+  |> List.iter (function
+    | Skeleton.Passthrough s -> Printf.printf "passthrough %S\n" s
+    | _ -> print_endline "parsed")
+;;
+
+let%expect_test "skeleton: statements split at top-level semicolons" =
+  show_stmts "select 1;\n\nselect (2);";
+  [%expect
+    {|
+    passthrough "select 1;"
+    passthrough "select (2);"
+    |}];
+  (* a semicolon inside parens is not a boundary; a missing final semicolon
+     still closes the last statement *)
+  show_stmts "select f(';') ; select 2";
+  [%expect
+    {|
+    passthrough "select f(';') ;"
+    passthrough "select 2"
+    |}];
+  (* comments attach to the following statement; a trailing comment forms its
+     own chunk *)
+  show_stmts "--name: a\nselect 1;\n-- tail";
+  [%expect
+    {|
+    passthrough "--name: a\nselect 1;"
+    passthrough "-- tail"
+    |}];
+  show_stmts "";
   [%expect {| |}]
 ;;
 
@@ -220,12 +249,68 @@ let%expect_test "emit: select river layout" =
 ;;
 
 let%expect_test "passthrough: unsupported construct emitted unchanged" =
-  ignore Pipeline.format;
-  [%expect {| |}]
+  let src = "select case when x then 1 else 2 end\n  from t ;\n" in
+  let r = Pipeline.format src in
+  Printf.printf "had_passthrough %b\n" r.had_passthrough;
+  Printf.printf "unchanged %b\n" (String.equal r.output src);
+  [%expect
+    {|
+    had_passthrough true
+    unchanged true
+    |}]
+;;
+
+let foreach_example f =
+  let dir = "../examples" in
+  Sys.readdir dir
+  |> Array.to_list
+  |> List.sort compare
+  |> List.iter (fun file ->
+    if Filename.check_suffix file ".sql"
+    then (
+      let ic = open_in_bin (Filename.concat dir file) in
+      let src = really_input_string ic (in_channel_length ic) in
+      close_in ic;
+      f file src))
 ;;
 
 (* Invariant: tokenizing formatted output yields the same tokens as the input. *)
-let%expect_test "invariant: token preservation" = [%expect {| |}]
+let%expect_test "invariant: token preservation" =
+  foreach_example (fun file src ->
+    let toks = Lexer.tokens_of_string src in
+    let toks' = Lexer.tokens_of_string (Pipeline.format src).output in
+    let ok =
+      List.length toks = List.length toks' && List.for_all2 Token.equal toks toks'
+    in
+    Printf.printf "%-15s %s\n" file (if ok then "ok" else "FAILED"));
+  [%expect
+    {|
+    bugshield.sql   ok
+    char.sql        ok
+    init.sql        ok
+    items.sql       ok
+    lore.sql        ok
+    map.sql         ok
+    session.sql     ok
+    vitals.sql      ok
+    |}]
+;;
 
 (* Invariant: formatting is a fixed point after the first application. *)
-let%expect_test "invariant: idempotence" = [%expect {| |}]
+let%expect_test "invariant: idempotence" =
+  foreach_example (fun file src ->
+    let once = (Pipeline.format src).output in
+    let twice = (Pipeline.format once).output in
+    Printf.printf "%-15s %s\n" file (if String.equal once twice then "ok" else "FAILED"));
+  [%expect
+    {|
+    bugshield.sql   ok
+    char.sql        ok
+    init.sql        ok
+    items.sql       ok
+    lore.sql        ok
+    map.sql         ok
+    session.sql     ok
+    vitals.sql      ok
+    |}]
+;;

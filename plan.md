@@ -76,8 +76,8 @@ type stmt =
 
 ## Milestones
 
-1. **Lexer + invariants** — tokenize all of `examples/`; property tests: `lex (emit (lex x)) = lex x` once emit exists. *(~1 day)*
-2. **Statement splitter + passthrough** — at this point the tool runs end-to-end, output = input. Ship the skeleton before any layout. *(~1 day)*
+1. ~~**Lexer + invariants**~~ *(done 2026-06-10)* — tokenize all of `examples/`; property tests: `lex (emit (lex x)) = lex x` once emit exists.
+2. ~~**Statement splitter + passthrough**~~ *(done 2026-06-10)* — tool runs end-to-end, output = input (passthrough emits exact source slices via token spans; statements joined by one blank line per spec §Resolved-5). Nonzero exit on passthrough deferred to milestone 7 — it would fail every golden until then.
 3. **Core select river** — select/from/where/order by/limit, leading commas, `as` lines, semicolon rules. Golden: `lore.sql`, `items.sql`, `map.sql` (join), `session.sql` selects. *(~2 days)*
 4. **Insert/update/returning** — mirror blocks, `into` anchor, multi-word verb break. Golden: `char.sql`, `vitals.sql` insert-vitals, `session.sql`. *(~1–2 days)*
 5. **CTEs** — end-shield form, recursive body layout, inline scalar subqueries. Golden: `bugshield.sql`, `session.sql` play-log. *(~1–2 days)*

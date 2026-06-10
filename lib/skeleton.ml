@@ -37,6 +37,7 @@ type stmt =
   | Dml of
       { cte : cte option
       ; clauses : clause list
+      ; semi : bool (* trailing semicolon present in source *)
       }
   | Insert of
       { verb : string list (* e.g. ["insert"] or ["insert"; "or"; "replace"] *)
@@ -50,6 +51,13 @@ type stmt =
       ; defs : coldef list
       }
   | Passthrough of string (* exact source slice, emitted unchanged *)
+
+(* A statement plus the comment lines that precede it. For Passthrough the
+   comments stay inside the source slice and the list is empty. *)
+type parsed =
+  { comments : string list
+  ; stmt : stmt
+  }
 
 type span = int * int (* byte offsets into the source: (start, end) *)
 
@@ -75,12 +83,166 @@ let split (toks : (Token.t * span) list) : (Token.t * span) list list =
   go toks 0 [] []
 ;;
 
-(* Classify each statement. Until the layout milestones land, everything is
+exception Unsupported
+
+(* Keywords that open a river clause in a select statement (milestone-3 set). *)
+let clause_starters =
+  [ "select"
+  ; "from"
+  ; "where"
+  ; "order by"
+  ; "group by"
+  ; "limit"
+  ; "on"
+  ; "join"
+  ; "inner join"
+  ; "left join"
+  ; "cross join"
+  ; "left outer join"
+  ; "right outer join"
+  ; "full outer join"
+  ]
+;;
+
+(* Keywords that may appear inside an expression blob at paren depth 0.
+   Anything else at depth 0 means a construct we don't lay out yet. *)
+let expr_kws =
+  [ "is"
+  ; "not"
+  ; "null"
+  ; "like"
+  ; "glob"
+  ; "in"
+  ; "between"
+  ; "exists"
+  ; "desc"
+  ; "asc"
+  ; "distinct"
+  ; "collate"
+  ; "all"
+  ]
+;;
+
+(* Conditions live one per line with `and`/`or` river-aligned, so those
+   keywords split clauses — but only in predicate context. *)
+let predicate_kw = function
+  | "where" | "on" | "and" | "or" -> true
+  | _ -> false
+;;
+
+(* Split a clause into (kw, body) segments at depth-0 clause keywords; in
+   predicate context also at `and`/`or` (except the `and` paired with a
+   depth-0 `between`). Raises Unsupported on anything outside the
+   milestone-3 grammar. *)
+let to_segments (toks : Token.t list) : (string * Token.t list) list =
+  let rec go toks depth after_between kw body segs =
+    let close () = (kw, List.rev body) :: segs in
+    match toks with
+    | [] -> List.rev (close ())
+    | Token.Keyword k :: rest when depth = 0 && List.mem k clause_starters ->
+      go rest 0 false k [] (close ())
+    | Token.Keyword (("and" | "or") as k) :: rest when depth = 0 && predicate_kw kw ->
+      if after_between && String.equal k "and"
+      then go rest 0 false kw (Token.Keyword k :: body) segs
+      else go rest 0 false k [] (close ())
+    | Token.Keyword "between" :: rest when depth = 0 ->
+      go rest 0 true kw (Token.Keyword "between" :: body) segs
+    | Token.Keyword "as" :: rest when depth = 0 ->
+      (* validated during item splitting; only legal as a select-item alias *)
+      go rest 0 after_between kw (Token.Keyword "as" :: body) segs
+    | Token.Keyword k :: rest when depth = 0 && List.mem k expr_kws ->
+      go rest 0 after_between kw (Token.Keyword k :: body) segs
+    | Token.Keyword _ :: _ when depth = 0 -> raise Unsupported
+    | Token.Comment _ :: _ -> raise Unsupported
+    | Token.RParen :: _ when depth = 0 -> raise Unsupported
+    | (Token.LParen as t) :: rest -> go rest (depth + 1) after_between kw (t :: body) segs
+    | (Token.RParen as t) :: rest -> go rest (depth - 1) after_between kw (t :: body) segs
+    | t :: rest -> go rest depth after_between kw (t :: body) segs
+  in
+  match toks with
+  | Token.Keyword k :: rest when List.mem k clause_starters -> go rest 0 false k [] []
+  | _ -> raise Unsupported
+;;
+
+(* Split a comma-list clause body into items at depth-0 commas. A trailing
+   `as <name>` at depth 0 becomes the item alias (select lists only). *)
+let to_items ~(aliases : bool) (body : Token.t list) : item list =
+  let split_commas toks =
+    let rec go toks depth cur items =
+      match toks with
+      | [] -> List.rev (List.rev cur :: items)
+      | Token.Comma :: rest when depth = 0 -> go rest 0 [] (List.rev cur :: items)
+      | (Token.LParen as t) :: rest -> go rest (depth + 1) (t :: cur) items
+      | (Token.RParen as t) :: rest -> go rest (depth - 1) (t :: cur) items
+      | t :: rest -> go rest depth (t :: cur) items
+    in
+    go toks 0 [] []
+  in
+  split_commas body
+  |> List.map (fun toks ->
+    let expr, alias =
+      match List.rev toks with
+      | Token.Ident a :: Token.Keyword "as" :: rev_expr when aliases ->
+        List.rev rev_expr, Some a
+      | _ -> toks, None
+    in
+    let has_as =
+      List.exists
+        (function
+          | Token.Keyword "as" -> true
+          | _ -> false)
+        (let rec strip_parens depth acc = function
+           | [] -> List.rev acc
+           | Token.LParen :: rest -> strip_parens (depth + 1) acc rest
+           | Token.RParen :: rest -> strip_parens (depth - 1) acc rest
+           | t :: rest -> strip_parens depth (if depth = 0 then t :: acc else acc) rest
+         in
+         strip_parens 0 [] expr)
+    in
+    if has_as || expr = [] then raise Unsupported;
+    { expr; alias })
+;;
+
+let parse_select (toks : Token.t list) : stmt =
+  let toks, semi =
+    match List.rev toks with
+    | Token.Semicolon :: rev_rest -> List.rev rev_rest, true
+    | _ -> toks, false
+  in
+  let clauses =
+    to_segments toks
+    |> List.map (fun (kw, body) ->
+      let items =
+        if predicate_kw kw
+        then (
+          match to_items ~aliases:false body with
+          | [ item ] -> [ item ]
+          | _ -> raise Unsupported)
+        else to_items ~aliases:(String.equal kw "select") body
+      in
+      { kw; items })
+  in
+  Dml { cte = None; clauses; semi }
+;;
+
+(* Classify each statement. Plain selects become Dml; everything else is
    Passthrough: the source slice from the chunk's first token to its last. *)
-let parse (src : string) (toks : (Token.t * span) list) : stmt list =
+let parse (src : string) (toks : (Token.t * span) list) : parsed list =
   split toks
   |> List.map (fun chunk ->
-    let start, _ = snd (List.hd chunk) in
-    let _, stop = snd (List.hd (List.rev chunk)) in
-    Passthrough (String.sub src start (stop - start)))
+    let passthrough () =
+      let start, _ = snd (List.hd chunk) in
+      let _, stop = snd (List.hd (List.rev chunk)) in
+      { comments = []; stmt = Passthrough (String.sub src start (stop - start)) }
+    in
+    let rec strip_comments acc = function
+      | (Token.Comment c, _) :: rest -> strip_comments (c :: acc) rest
+      | body -> List.rev acc, body
+    in
+    let comments, body = strip_comments [] chunk in
+    match body with
+    | (Token.Keyword "select", _) :: _ ->
+      (try { comments; stmt = parse_select (List.map fst body) } with
+       | Unsupported -> passthrough ())
+    | _ -> passthrough ())
 ;;

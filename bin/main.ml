@@ -19,9 +19,9 @@ let read_all (ic : in_channel) : string =
 
 let () =
   let format_one name src =
-    let r : Sqlbrook.Pipeline.result = Sqlbrook.Pipeline.format src in
-    print_string r.output;
-    if r.had_passthrough
+    let { Sqlbrook.Pipeline.output; had_passthrough } = Sqlbrook.Pipeline.format src in
+    print_string output;
+    if had_passthrough
     then Printf.eprintf "sqlbrook: %s: some statements passed through unformatted\n" name
   in
   match Array.to_list Sys.argv with

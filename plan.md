@@ -78,7 +78,7 @@ type stmt =
 
 1. ~~**Lexer + invariants**~~ *(done 2026-06-10)* — tokenize all of `examples/`; property tests: `lex (emit (lex x)) = lex x` once emit exists.
 2. ~~**Statement splitter + passthrough**~~ *(done 2026-06-10)* — tool runs end-to-end, output = input (passthrough emits exact source slices via token spans; statements joined by one blank line per spec §Resolved-5). Nonzero exit on passthrough deferred to milestone 7 — it would fail every golden until then.
-3. **Core select river** — select/from/where/order by/limit, leading commas, `as` lines, semicolon rules. Golden: `lore.sql`, `items.sql`, `map.sql` (join), `session.sql` selects. *(~2 days)*
+3. ~~**Core select river**~~ *(done 2026-06-10)* — select/from/where/order by/limit, leading commas, `as` lines, semicolon rules, joins + `on`, `and`/`or` river lines (with `between … and` guard). Golden: `lore.sql`, `items.sql`, `map.sql` (join), `session.sql` selects. Corpus conformed by promotion: predicate breaks joined (cut feature), session.sql "current" river width 9 → 8 per Resolved-2nd-pass #1.
 4. **Insert/update/returning** — mirror blocks, `into` anchor, multi-word verb break. Golden: `char.sql`, `vitals.sql` insert-vitals, `session.sql`. *(~1–2 days)*
 5. **CTEs** — end-shield form, recursive body layout, inline scalar subqueries. Golden: `bugshield.sql`, `session.sql` play-log. *(~1–2 days)*
 6. **DDL** — create table/view. Golden: `init.sql`. *(~1–2 days)*

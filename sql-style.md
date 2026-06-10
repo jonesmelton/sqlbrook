@@ -72,7 +72,8 @@ Derived from `examples/*.sql`. Describes the dominant style; outliers noted at t
            like '%' || :term || '%'
   ```
 - Long predicates may break after the column name, with the operator
-  (`like`) on a continuation line, further indented.
+  (`like`) on a continuation line, further indented. *(Cut from the MVP
+  formatter — see Resolved third pass #1; reserved as a future feature.)*
 
 ## Joins
 
@@ -240,6 +241,17 @@ char_name text
 
 The example corpus has been edited to conform; previously flagged
 inconsistencies are fixed.
+
+## Resolved (2026-06-10, third pass — milestone 3 promotion)
+
+1. **Predicate breaking after the column name is cut from the MVP**: each
+   condition is emitted whole on one line. The broken forms in `lore.sql`
+   and `items.sql` were joined by promotion; the style remains documented
+   above as a future feature.
+2. **session.sql "current"** used river width 9 (matching the adjacent
+   `end` statement's `returning`) though its own longest keyword is
+   `order by` (8). Per second-pass #1 (width = longest keyword in the
+   query, no extra padding) it was re-promoted at width 8.
 
 ## Divergences from Holywell (sqlstyle.guide)
 

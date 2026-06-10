@@ -17,12 +17,12 @@ insert into sessions
             ;
 
 --name: current
-   select *
-     from sessions
-    where end_time is null
- order by start_time desc
-    limit 1
-          ;
+  select *
+    from sessions
+   where end_time is null
+order by start_time desc
+   limit 1
+         ;
 
 --name: end
    update sessions

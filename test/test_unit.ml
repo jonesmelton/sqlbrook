@@ -6,7 +6,7 @@
      - token preservation:  lex (fmt x) = lex x
      - idempotence:         fmt (fmt x) = fmt x
 
-   Layout-stage cases are stubbed; bodies land with their milestones. *)
+   Layout cases for insert/CTE/DDL land with their milestones. *)
 
 open Sqlbrook
 
@@ -210,7 +210,8 @@ let%expect_test "invariant: lexer roundtrip over examples corpus" =
 
 let show_stmts src =
   Skeleton.parse src (Lexer.tokens_with_spans src)
-  |> List.iter (function
+  |> List.iter (fun (p : Skeleton.parsed) ->
+    match p.stmt with
     | Skeleton.Passthrough s -> Printf.printf "passthrough %S\n" s
     | _ -> print_endline "parsed")
 ;;
@@ -219,33 +220,117 @@ let%expect_test "skeleton: statements split at top-level semicolons" =
   show_stmts "select 1;\n\nselect (2);";
   [%expect
     {|
-    passthrough "select 1;"
-    passthrough "select (2);"
+    parsed
+    parsed
     |}];
   (* a semicolon inside parens is not a boundary; a missing final semicolon
      still closes the last statement *)
   show_stmts "select f(';') ; select 2";
   [%expect
     {|
-    passthrough "select f(';') ;"
-    passthrough "select 2"
+    parsed
+    parsed
     |}];
   (* comments attach to the following statement; a trailing comment forms its
      own chunk *)
   show_stmts "--name: a\nselect 1;\n-- tail";
   [%expect
     {|
-    passthrough "--name: a\nselect 1;"
+    parsed
     passthrough "-- tail"
     |}];
   show_stmts "";
   [%expect {| |}]
 ;;
 
+let fmt src = print_string (Pipeline.format src).output
+
 let%expect_test "emit: select river layout" =
-  ignore Emit.format;
-  ignore Measure.river_width;
-  [%expect {| |}]
+  (* river width from the longest clause keyword; leading commas; semicolon
+     on its own line in the content column *)
+  fmt "select a, b, c from t where x = 1 order by ts desc limit 1;";
+  [%expect
+    {|
+    select a
+         , b
+         , c
+      from t
+     where x = 1
+  order by ts desc
+     limit 1
+           ;
+    |}];
+  (* no trailing semicolon in, none out *)
+  fmt "select a from t";
+  [%expect
+    {|
+    select a
+      from t
+    |}]
+;;
+
+let%expect_test "emit: as on its own line, river-aligned" =
+  fmt "select printf('%-18s', short_name) as short_name, full_name as f from t;";
+  [%expect
+    {|
+    select printf('%-18s', short_name)
+        as short_name
+         , full_name
+        as f
+      from t
+           ;
+    |}]
+;;
+
+let%expect_test "emit: predicates one per line, and/or in the river" =
+  fmt "select a from t where x = :x and y like '%' || :term || '%' or z is not null;";
+  [%expect
+    {|
+    select a
+      from t
+     where x = :x
+       and y like '%' || :term || '%'
+        or z is not null
+           ;
+    |}];
+  (* the `and` belonging to a depth-0 `between` does not split *)
+  fmt "select a from t where x between 1 and 2 and y = 3;";
+  [%expect
+    {|
+    select a
+      from t
+     where x between 1 and 2
+       and y = 3
+           ;
+    |}]
+;;
+
+let%expect_test "emit: joins set the river, on gets its own line" =
+  fmt
+    "select r.room_id, m.filename from rooms r inner join maps m on r.map_id = m.map_id \
+     where r.room_id = :room_id;";
+  [%expect
+    {|
+        select r.room_id
+             , m.filename
+          from rooms r
+    inner join maps m
+            on r.map_id = m.map_id
+         where r.room_id = :room_id
+               ;
+    |}]
+;;
+
+let%expect_test "emit: comments precede the statement unchanged" =
+  fmt "--name: find\n--fn: first\nselect a from t;";
+  [%expect
+    {|
+    --name: find
+    --fn: first
+    select a
+      from t
+           ;
+    |}]
 ;;
 
 let%expect_test "passthrough: unsupported construct emitted unchanged" =

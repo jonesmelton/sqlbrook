@@ -1,0 +1,119 @@
+; Inline ppx_expect tests must live in a library stanza with inline_tests.
+(library
+ (name test_unit)
+ (libraries sqlbrook)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect)))
+
+; Golden corpus: format each examples/*.sql and diff against itself.
+; The conformed examples are the spec's executable form — formatted output
+; must equal the input byte-for-byte. `dune promote` accepts changes.
+;
+; vitals.sql is excluded: its current-vitals and xp-rate statements are in the
+; cut window-function style and are reserved as future-feature references.
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/lore.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   lore.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/lore.sql lore.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/items.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   items.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/items.sql items.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/map.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   map.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/map.sql map.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/char.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   char.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/char.sql char.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/session.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   session.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/session.sql session.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/bugshield.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   bugshield.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/bugshield.sql bugshield.sql.actual)))
+
+(rule
+ (alias runtest)
+ (deps
+  (:src %{project_root}/examples/init.sql)
+  %{bin:sqlbrook})
+ (action
+  (with-stdout-to
+   init.sql.actual
+   (run sqlbrook %{src}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff %{project_root}/examples/init.sql init.sql.actual)))

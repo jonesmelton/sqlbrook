@@ -7,20 +7,32 @@
    through untouched. *)
 
 type t =
-  | Keyword of string          (* normalized lowercase; may be multi-word, e.g. "order by" *)
-  | Ident of string            (* bare identifier *)
-  | Quoted of string           (* quoted identifier or string literal, delimiters included *)
+  | Keyword of string (* normalized lowercase; may be multi-word, e.g. "order by" *)
+  | Ident of string (* bare identifier *)
+  | Quoted of string (* quoted identifier or string literal, delimiters included *)
   | Number of string
-  | Operator of string         (* =, <>, ||, +, etc. *)
-  | Placeholder of string      (* :name, @name, $name, ?NNN, ? *)
+  | Operator of string (* =, <>, ||, +, etc. *)
+  | Placeholder of string (* :name, @name, $name, ?NNN, ? *)
   | LParen
   | RParen
   | Comma
   | Semicolon
-  | Comment of string          (* a -- line comment, text excluding the trailing newline *)
+  | Comment of string (* a -- line comment, text excluding the trailing newline *)
 
 (* Render a token back to its source text. Used by emit and by the
    token-preservation invariant. *)
-let to_string (_t : t) : string = failwith "Token.to_string: not implemented"
+let to_string = function
+  | Keyword s -> s
+  | Ident s -> s
+  | Quoted s -> s
+  | Number s -> s
+  | Operator s -> s
+  | Placeholder s -> s
+  | LParen -> "("
+  | RParen -> ")"
+  | Comma -> ","
+  | Semicolon -> ";"
+  | Comment s -> s
+;;
 
-let equal (_a : t) (_b : t) : bool = failwith "Token.equal: not implemented"
+let equal (a : t) (b : t) : bool = a = b

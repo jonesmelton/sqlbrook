@@ -10,5 +10,4 @@ type result =
   ; had_passthrough : bool
   }
 
-let format (_input : string) : result =
-  failwith "Pipeline.format: not implemented"
+let format (_input : string) : result = failwith "Pipeline.format: not implemented"

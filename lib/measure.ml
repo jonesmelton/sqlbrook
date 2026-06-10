@@ -11,3 +11,4 @@
 (* River column width, in bytes, for a parsed statement. *)
 let river_width (_stmt : Skeleton.stmt) : int =
   failwith "Measure.river_width: not implemented"
+;;

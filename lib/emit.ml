@@ -9,7 +9,9 @@
 (* Format a single statement given its precomputed river width. *)
 let emit_stmt (_buf : Buffer.t) (_width : int) (_stmt : Skeleton.stmt) : unit =
   failwith "Emit.emit_stmt: not implemented"
+;;
 
 (* Format a whole statement list (the public entry point of the library). *)
 let format (_stmts : Skeleton.stmt list) : string =
   failwith "Emit.format: not implemented"
+;;

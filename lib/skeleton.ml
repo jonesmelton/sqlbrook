@@ -39,11 +39,11 @@ type stmt =
       ; clauses : clause list
       }
   | Insert of
-      { verb : string list          (* e.g. ["insert"] or ["insert"; "or"; "replace"] *)
+      { verb : string list (* e.g. ["insert"] or ["insert"; "or"; "replace"] *)
       ; table : string
       ; cols : string list option
       ; values : item list
-      ; tail : clause list          (* returning, on conflict, etc. *)
+      ; tail : clause list (* returning, on conflict, etc. *)
       }
   | Ddl of
       { table : string
@@ -53,5 +53,4 @@ type stmt =
 
 (* Split a token stream into statements at top-level semicolons, then classify
    each. Comments are statement separators that pass through unchanged. *)
-let parse (_toks : Token.t list) : stmt list =
-  failwith "Skeleton.parse: not implemented"
+let parse (_toks : Token.t list) : stmt list = failwith "Skeleton.parse: not implemented"

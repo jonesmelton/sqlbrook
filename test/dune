@@ -1,8 +1,11 @@
 ; Inline ppx_expect tests must live in a library stanza with inline_tests.
+
 (library
  (name test_unit)
  (libraries sqlbrook)
- (inline_tests)
+ (inline_tests
+  (deps
+   (glob_files %{project_root}/examples/*.sql)))
  (preprocess
   (pps ppx_expect)))
 

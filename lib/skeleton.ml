@@ -17,6 +17,16 @@ and clause =
   ; items : item list
   }
 
+(* One create-table column def or table constraint. [lead] is the left-column
+   token (column name, or a `primary key`/`foreign key`/`unique` keyword);
+   [head_rest] is the type / paren group on the same line; [segments] are
+   trailing constraints, each emitted on its own continuation line. *)
+and ddl_item =
+  { lead : Token.t
+  ; head_rest : Token.t list
+  ; segments : Token.t list list
+  }
+
 and stmt =
   | Dml of
       { clauses : clause list
@@ -25,10 +35,20 @@ and stmt =
   | Insert of
       { verb : string
       ; table : Token.t list
-      ; cols : item list
+      ; cols : item list option
       ; vals : item list
       ; returning : bool
       ; semi : bool
+      }
+  | CreateTable of
+      { header : Token.t list (* create table [if not exists] *)
+      ; name : Token.t list (* table name (one word token; schema-qualified ok) *)
+      ; defs : ddl_item list
+      ; semi : bool
+      }
+  | CreateView of
+      { header : Token.t list (* create view [if not exists] <name> *)
+      ; body : stmt (* the defining select; carries the semicolon *)
       }
   | Cte of
       { name : string
@@ -260,15 +280,22 @@ let parse_insert (toks : Token.t list) : stmt =
     | Token.Keyword "into" :: rest -> rest
     | _ -> raise Unsupported
   in
-  (* table = tokens up to the column-list open paren *)
+  (* table = tokens up to the column-list open paren or the `values` keyword
+     (the column list is optional) *)
   let rec take_table acc = function
-    | Token.LParen :: _ as rest -> List.rev acc, rest
+    | (Token.LParen :: _ | Token.Keyword "values" :: _) as rest -> List.rev acc, rest
     | t :: rest -> take_table (t :: acc) rest
     | [] -> raise Unsupported
   in
   let table, rest = take_table [] rest in
   if table = [] then raise Unsupported;
-  let col_toks, rest = take_paren_group rest in
+  let cols, rest =
+    match rest with
+    | Token.LParen :: _ ->
+      let col_toks, rest = take_paren_group rest in
+      Some (to_items ~aliases:false col_toks), rest
+    | _ -> None, rest
+  in
   let rest =
     match rest with
     | Token.Keyword "values" :: rest -> rest
@@ -281,7 +308,6 @@ let parse_insert (toks : Token.t list) : stmt =
     | [] -> false
     | _ -> raise Unsupported
   in
-  let cols = to_items ~aliases:false col_toks in
   let vals = to_items ~aliases:false val_toks in
   Insert { verb; table; cols; vals; returning; semi }
 ;;
@@ -318,6 +344,106 @@ let parse_cte (toks : Token.t list) : stmt =
   Cte { name; cols; body = parse_select body_toks; outer }
 ;;
 
+(* Split a token list at depth-0 commas (parens protect inner commas). *)
+let comma_split (toks : Token.t list) : Token.t list list =
+  let rec go toks depth cur acc =
+    match toks with
+    | [] -> List.rev (List.rev cur :: acc)
+    | Token.Comma :: rest when depth = 0 -> go rest 0 [] (List.rev cur :: acc)
+    | (Token.LParen as t) :: rest -> go rest (depth + 1) (t :: cur) acc
+    | (Token.RParen as t) :: rest -> go rest (depth - 1) (t :: cur) acc
+    | t :: rest -> go rest depth (t :: cur) acc
+  in
+  go toks 0 [] []
+;;
+
+(* Keywords that start a fresh continuation line inside a column def or table
+   constraint (`not null`, `default ...`, `references ...`, `on conflict ...`). *)
+let ddl_break = function
+  | "not" | "default" | "references" | "collate" | "check" | "unique" | "primary key"
+  | "foreign key" | "on conflict" -> true
+  | _ -> false
+;;
+
+(* A create-table item: lead token, the head remainder up to the first depth-0
+   break keyword, then one segment per subsequent break keyword. *)
+let parse_ddl_item (toks : Token.t list) : ddl_item =
+  let lead, rest =
+    match toks with
+    | (Token.Ident _ as t) :: rest -> t, rest
+    | (Token.Quoted _ as t) :: rest -> t, rest
+    | (Token.Keyword ("primary key" | "foreign key" | "unique") as t) :: rest -> t, rest
+    | _ -> raise Unsupported
+  in
+  (* Collect one segment: the leading break keyword plus everything up to the
+     next depth-0 break keyword. *)
+  let rec take_seg depth acc = function
+    | Token.Keyword k :: _ as toks when depth = 0 && ddl_break k -> List.rev acc, toks
+    | (Token.LParen as t) :: r -> take_seg (depth + 1) (t :: acc) r
+    | (Token.RParen as t) :: r -> take_seg (depth - 1) (t :: acc) r
+    | t :: r -> take_seg depth (t :: acc) r
+    | [] -> List.rev acc, []
+  in
+  let rec segs = function
+    | [] -> []
+    | Token.Keyword k :: rest when ddl_break k ->
+      let seg, rest = take_seg 0 [ Token.Keyword k ] rest in
+      seg :: segs rest
+    | _ -> raise Unsupported
+  in
+  let head_rest, after = take_seg 0 [] rest in
+  { lead; head_rest; segments = segs after }
+;;
+
+(* create table [if not exists] <name> ( defs ) [;] *)
+let parse_create_table (toks : Token.t list) : stmt =
+  let toks, semi =
+    match List.rev toks with
+    | Token.Semicolon :: rev_rest -> List.rev rev_rest, true
+    | _ -> toks, false
+  in
+  let header, rest =
+    match toks with
+    | (Token.Keyword "create table" as t) :: (Token.Keyword "if not exists" as t2) :: rest ->
+      [ t; t2 ], rest
+    | (Token.Keyword "create table" as t) :: rest -> [ t ], rest
+    | _ -> raise Unsupported
+  in
+  let rec take_name acc = function
+    | Token.LParen :: _ as rest -> List.rev acc, rest
+    | t :: rest -> take_name (t :: acc) rest
+    | [] -> raise Unsupported
+  in
+  let name, rest = take_name [] rest in
+  if name = [] then raise Unsupported;
+  let body_toks, after = take_paren_group rest in
+  if after <> [] then raise Unsupported;
+  let defs = List.map parse_ddl_item (comma_split body_toks) in
+  if defs = [] then raise Unsupported;
+  CreateTable { header; name; defs; semi }
+;;
+
+(* create view [if not exists] <name> as <select> [;]
+   The header is everything up to the depth-0 `as`; the body is a plain select
+   laid out as a normal top-level statement. *)
+let parse_create_view (toks : Token.t list) : stmt =
+  let rec take_header depth acc = function
+    | Token.Keyword "as" :: rest when depth = 0 -> List.rev acc, rest
+    | (Token.LParen as t) :: r -> take_header (depth + 1) (t :: acc) r
+    | (Token.RParen as t) :: r -> take_header (depth - 1) (t :: acc) r
+    | t :: r -> take_header depth (t :: acc) r
+    | [] -> raise Unsupported
+  in
+  let header, body_toks = take_header 0 [] toks in
+  (match header with
+   | Token.Keyword "create view" :: _ :: _ -> ()
+   | _ -> raise Unsupported);
+  (match body_toks with
+   | Token.Keyword "select" :: _ -> ()
+   | _ -> raise Unsupported);
+  CreateView { header; body = parse_select body_toks }
+;;
+
 (* Plain selects become Dml; everything else is Passthrough (the source slice
    from the chunk's first token to its last). *)
 let parse (src : string) (toks : (Token.t * span) list) : parsed list =
@@ -349,6 +475,12 @@ let parse (src : string) (toks : (Token.t * span) list) : parsed list =
        | Unsupported -> passthrough body)
     | (Token.Keyword "with", _) :: _ ->
       (try { comments; stmt = parse_cte (List.map fst body) } with
+       | Unsupported -> passthrough body)
+    | (Token.Keyword "create table", _) :: _ ->
+      (try { comments; stmt = parse_create_table (List.map fst body) } with
+       | Unsupported -> passthrough body)
+    | (Token.Keyword "create view", _) :: _ ->
+      (try { comments; stmt = parse_create_view (List.map fst body) } with
        | Unsupported -> passthrough body)
     | _ -> passthrough body)
 ;;

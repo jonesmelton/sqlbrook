@@ -1,30 +1,4 @@
-(* Glue closing delimiters and commas to the previous token, glue after an
-   open paren, glue a function name to its open paren; else single spaces. *)
-let render_tokens (toks : Token.t list) : string =
-  let buf = Buffer.create 64 in
-  let emit prev t =
-    let glued =
-      match prev, t with
-      | Some Token.LParen, _ -> true
-      | Some (Token.Ident _), Token.LParen -> true
-      | Some _, (Token.RParen | Token.Comma | Token.Semicolon) -> true
-      | _ -> false
-    in
-    (match prev with
-     | Some _ when not glued -> Buffer.add_char buf ' '
-     | _ -> ());
-    Buffer.add_string buf (Token.to_string t)
-  in
-  ignore
-    (List.fold_left
-       (fun prev t ->
-          emit prev t;
-          Some t)
-       None
-       toks);
-  Buffer.contents buf
-;;
-
+let render_tokens = Render.render_tokens
 let pad (n : int) : string = String.make (max 0 n) ' '
 let shift (n : int) (lines : string list) : string list = List.map (( ^ ) (pad n)) lines
 
@@ -73,6 +47,41 @@ let rec stmt_lines (stmt : Skeleton.stmt) : string list =
     line (pad (r + 1) ^ ")");
     List.iter line (stmt_lines outer);
     List.rev !lines
+  | Skeleton.CreateTable { header; name; defs; semi } ->
+    let r = Measure.river_width stmt in
+    let lines = ref [] in
+    let line s = lines := s :: !lines in
+    line (render_tokens header);
+    let name_s = render_tokens name in
+    line (pad (r - String.length name_s) ^ name_s ^ " (");
+    List.iteri
+      (fun i { Skeleton.lead; head_rest; segments } ->
+         let lead_s = Token.to_string lead in
+         let leadcol =
+           if i = 0
+           then pad (r - String.length lead_s) ^ lead_s
+           else pad (r - 1 - String.length lead_s) ^ "," ^ lead_s
+         in
+         (match head_rest with
+          | [] -> line leadcol
+          | _ -> line (leadcol ^ " " ^ render_tokens head_rest));
+         List.iter
+           (fun seg ->
+              (* `on conflict ...` nests one column past the content column;
+                 every other constraint sits at the content column (river + 1) *)
+              let indent =
+                match seg with
+                | Token.Keyword "on conflict" :: _ -> r + 2
+                | _ -> r + 1
+              in
+              line (pad indent ^ render_tokens seg))
+           segments)
+      defs;
+    line (pad (r - 1) ^ if semi then ") ;" else ")");
+    List.rev !lines
+  | Skeleton.CreateView { header; body } ->
+    let r = Measure.river_width body in
+    (render_tokens header :: (pad (r - 2) ^ "as") :: stmt_lines body)
   | Skeleton.Insert { verb; table; cols; vals; returning; semi } ->
     let r = Measure.river_width stmt in
     let lines = ref [] in
@@ -91,8 +100,11 @@ let rec stmt_lines (stmt : Skeleton.stmt) : string list =
     else (
       line verb;
       line (pad (r - 4) ^ "into " ^ render_tokens table));
-    (* column block: closing paren always on its own line *)
-    block (pad (r - 1) ^ ")") cols;
+    (* column block: closing paren always on its own line; omitted entirely
+       when the statement has no column list *)
+    (match cols with
+     | Some cols -> block (pad (r - 1) ^ ")") cols
+     | None -> ());
     line (pad (r - 6) ^ "values");
     (* value block: the closing paren shares its line with returning, or with
        the semicolon when there is no returning; otherwise stands alone *)

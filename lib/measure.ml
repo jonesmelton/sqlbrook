@@ -1,6 +1,6 @@
 (* River width = max byte-length of the left-column items. Measured in bytes,
    so non-ASCII identifiers misalign visually (accepted). *)
-let river_width (stmt : Skeleton.stmt) : int =
+let rec river_width (stmt : Skeleton.stmt) : int =
   match stmt with
   | Skeleton.Dml { clauses; _ } ->
     List.fold_left
@@ -14,6 +14,17 @@ let river_width (stmt : Skeleton.stmt) : int =
     if String.equal verb "insert"
     then String.length "insert into"
     else String.length "values"
+  | Skeleton.CreateTable { name; defs; _ } ->
+    (* widest left-column item: table name, or a column name / constraint
+       keyword (the leading comma adds one byte on every item but the first) *)
+    let name_w = String.length (Render.render_tokens name) in
+    let lead_w i (d : Skeleton.ddl_item) =
+      String.length (Token.to_string d.Skeleton.lead) + if i = 0 then 0 else 1
+    in
+    List.fold_left max name_w (List.mapi lead_w defs)
+  | Skeleton.CreateView { body; _ } ->
+    (* the `as` aligns to the body's own river *)
+    river_width body
   | Skeleton.Cte _ ->
     (* governs only the header's column block; body and outer statement
        compute their own rivers *)

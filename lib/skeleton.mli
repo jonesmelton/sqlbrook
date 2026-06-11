@@ -12,6 +12,15 @@ and clause =
   ; items : item list
   }
 
+(* A create-table column def or table constraint: [lead] is the right-aligned
+   left-column token, [head_rest] the type/paren group on its line, [segments]
+   the trailing constraints each on their own continuation line. *)
+and ddl_item =
+  { lead : Token.t
+  ; head_rest : Token.t list
+  ; segments : Token.t list list
+  }
+
 and stmt =
   | Dml of
       { clauses : clause list
@@ -20,10 +29,20 @@ and stmt =
   | Insert of
       { verb : string (* "insert" or "insert or replace" *)
       ; table : Token.t list
-      ; cols : item list
+      ; cols : item list option (* None when the column list is omitted *)
       ; vals : item list
       ; returning : bool
       ; semi : bool
+      }
+  | CreateTable of
+      { header : Token.t list (* create table [if not exists] *)
+      ; name : Token.t list (* table name (one word token; schema-qualified ok) *)
+      ; defs : ddl_item list
+      ; semi : bool
+      }
+  | CreateView of
+      { header : Token.t list (* create view [if not exists] <name> *)
+      ; body : stmt (* the defining select; carries the semicolon *)
       }
   | Cte of
       { name : string

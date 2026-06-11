@@ -439,6 +439,90 @@ let%expect_test "emit: cte is the same recursive block (golden: bugshield close)
     |}]
 ;;
 
+let%expect_test "emit: create table right-aligns names, glues leading commas" =
+  (* river = widest left-column item (here the table name); column names
+     right-align to it, the type column lines up, constraints drop to the
+     content column on their own line; `) ;` straddles the river *)
+  fmt
+    "create table if not exists skills (char_name text not null, tree text not null, \
+     leaf text, ts datetime default current_timestamp, unique (char_name, tree, leaf) \
+     on conflict ignore);";
+  [%expect
+    {|
+    create table if not exists
+       skills (
+    char_name text
+              not null
+        ,tree text
+              not null
+        ,leaf text
+          ,ts datetime
+              default current_timestamp
+      ,unique (char_name, tree, leaf)
+               on conflict ignore
+            ) ;
+    |}]
+;;
+
+let%expect_test "emit: table name wider than columns sets the river" =
+  fmt
+    "create table if not exists world.flyable_npcs (full_name text, area text, note text);";
+  [%expect
+    {|
+    create table if not exists
+    world.flyable_npcs (
+             full_name text
+                 ,area text
+                 ,note text
+                     ) ;
+    |}]
+;;
+
+let%expect_test "emit: foreign key constraint, references on the content column" =
+  fmt
+    "create table if not exists logs (char_name text, primary key (char_name, ts), \
+     foreign key (char_state) references vitals(rowid));";
+  [%expect
+    {|
+    create table if not exists
+            logs (
+       char_name text
+    ,primary key (char_name, ts)
+    ,foreign key (char_state)
+                 references vitals(rowid)
+               ) ;
+    |}]
+;;
+
+let%expect_test "emit: create view header, as line, body laid out as a select" =
+  fmt
+    "create view if not exists world.npcs_fmt as select printf('%-18s', short_name) as \
+     short_name, area from flyable_npcs;";
+  [%expect
+    {|
+    create view if not exists world.npcs_fmt
+        as
+    select printf('%-18s', short_name)
+        as short_name
+         , area
+      from flyable_npcs
+           ;
+    |}]
+;;
+
+let%expect_test "emit: insert with no column list keeps values aligned" =
+  fmt "insert into world.maps values (:map_id, :filename, :domain);";
+  [%expect
+    {|
+    insert into world.maps
+         values
+              ( :map_id
+              , :filename
+              , :domain
+              ) ;
+    |}]
+;;
+
 let%expect_test "emit: comments precede the statement unchanged" =
   fmt "--name: find\n--fn: first\nselect a from t;";
   [%expect

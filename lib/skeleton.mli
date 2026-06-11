@@ -13,6 +13,14 @@ type stmt =
       { clauses : clause list
       ; semi : bool
       }
+  | Insert of
+      { verb : string (* "insert" or "insert or replace" *)
+      ; table : Token.t list
+      ; cols : item list
+      ; vals : item list
+      ; returning : bool
+      ; semi : bool
+      }
   | Passthrough of
       { source : string (* exact source slice, emitted verbatim *)
       ; kind : string (* leading keyword, lowercased, for diagnostics *)

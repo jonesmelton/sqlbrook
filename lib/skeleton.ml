@@ -18,6 +18,14 @@ type stmt =
       { clauses : clause list
       ; semi : bool
       }
+  | Insert of
+      { verb : string
+      ; table : Token.t list
+      ; cols : item list
+      ; vals : item list
+      ; returning : bool
+      ; semi : bool
+      }
   | Passthrough of
       { source : string
       ; kind : string
@@ -56,6 +64,9 @@ exception Unsupported
 
 let clause_starters =
   [ "select"
+  ; "update"
+  ; "set"
+  ; "returning"
   ; "from"
   ; "where"
   ; "order by"
@@ -192,6 +203,66 @@ let parse_select (toks : Token.t list) : stmt =
   Dml { clauses; semi }
 ;;
 
+(* Consume a parenthesized group at the head of [toks]; return its inner
+   tokens (parens stripped) and the remainder. Raises Unsupported if [toks]
+   does not start with a balanced group. *)
+let take_paren_group (toks : Token.t list) : Token.t list * Token.t list =
+  match toks with
+  | Token.LParen :: rest ->
+    let rec go depth acc = function
+      | Token.RParen :: rest when depth = 0 -> List.rev acc, rest
+      | (Token.LParen as t) :: rest -> go (depth + 1) (t :: acc) rest
+      | (Token.RParen as t) :: rest -> go (depth - 1) (t :: acc) rest
+      | t :: rest -> go depth (t :: acc) rest
+      | [] -> raise Unsupported
+    in
+    go 0 [] rest
+  | _ -> raise Unsupported
+;;
+
+(* insert [or replace] into <table> ( cols ) values ( vals ) [returning *] [;] *)
+let parse_insert (toks : Token.t list) : stmt =
+  let toks, semi =
+    match List.rev toks with
+    | Token.Semicolon :: rev_rest -> List.rev rev_rest, true
+    | _ -> toks, false
+  in
+  let verb, rest =
+    match toks with
+    | Token.Keyword (("insert" | "insert or replace") as v) :: rest -> v, rest
+    | _ -> raise Unsupported
+  in
+  let rest =
+    match rest with
+    | Token.Keyword "into" :: rest -> rest
+    | _ -> raise Unsupported
+  in
+  (* table = tokens up to the column-list open paren *)
+  let rec take_table acc = function
+    | Token.LParen :: _ as rest -> List.rev acc, rest
+    | t :: rest -> take_table (t :: acc) rest
+    | [] -> raise Unsupported
+  in
+  let table, rest = take_table [] rest in
+  if table = [] then raise Unsupported;
+  let col_toks, rest = take_paren_group rest in
+  let rest =
+    match rest with
+    | Token.Keyword "values" :: rest -> rest
+    | _ -> raise Unsupported
+  in
+  let val_toks, rest = take_paren_group rest in
+  let returning =
+    match rest with
+    | [ Token.Keyword "returning"; Token.Operator "*" ] -> true
+    | [] -> false
+    | _ -> raise Unsupported
+  in
+  let cols = to_items ~aliases:false col_toks in
+  let vals = to_items ~aliases:false val_toks in
+  Insert { verb; table; cols; vals; returning; semi }
+;;
+
 (* Plain selects become Dml; everything else is Passthrough (the source slice
    from the chunk's first token to its last). *)
 let parse (src : string) (toks : (Token.t * span) list) : parsed list =
@@ -215,8 +286,11 @@ let parse (src : string) (toks : (Token.t * span) list) : parsed list =
     in
     let comments, body = strip_comments [] chunk in
     match body with
-    | (Token.Keyword "select", _) :: _ ->
+    | (Token.Keyword ("select" | "update"), _) :: _ ->
       (try { comments; stmt = parse_select (List.map fst body) } with
+       | Unsupported -> passthrough body)
+    | (Token.Keyword ("insert" | "insert or replace"), _) :: _ ->
+      (try { comments; stmt = parse_insert (List.map fst body) } with
        | Unsupported -> passthrough body)
     | _ -> passthrough body)
 ;;

@@ -4,13 +4,9 @@ The river style, as realized in `examples/*.sql`.
 
 ## Core principles
 
-1. **Lowercase.** Keywords are emitted lowercase. Identifiers pass through as
-   written (the corpus is all lowercase); the formatter does not downcase them,
-   since quoted identifiers are case-sensitive in SQLite.
-2. **River alignment.** Top-level clause keywords are right-aligned to a common
-   column, forming a vertical "river" of whitespace after them. Content starts
-   one space after the river.
-
+1. Keywords are emitted lowercase but identifiers pass through as written.
+2. Top-level clause keywords are right-aligned to a common column, forming a vertical "river" of whitespace after them.
+3. 
    ```sql
      select size
           , species
@@ -21,25 +17,15 @@ The river style, as realized in `examples/*.sql`.
    ```
 
    The river column is set by the longest expression occupying the left
-   column in the query — in DML that's the longest keyword (`order by`,
-   `returning`, `inner join`); in DDL it's the longest column name (with
-   glued comma), table name, or table-constraint keyword. Shorter items get
-   left-padded to match.
-3. **Leading commas**, one expression per line. Commas align in their own
-   column under the start of the first item, with one space between comma and
-   expression:
+   column in the query.
+3. commas align in their own column under the start of the first item, with one space between comma and expression:
 
    ```sql
    select name
         , alignment
         , burden
    ```
-4. **Parameter placeholders**: the corpus uses `:name`, but the formatter
-   must handle every form sqlite accepts: `:name`, `@name`, `$name`, `?NNN`,
-   and bare `?`.
-5. **snake_case** identifiers throughout.
-6. **Layout, not semantics.** The formatter arranges whitespace; it does not
-   enforce token choices like `=` vs `is`.
+6. The formatter arranges whitespace; it does not enforce token choices like `=` vs `is`.
 
 ## Select lists and aliases
 
@@ -73,9 +59,6 @@ The river style, as realized in `examples/*.sql`.
      and full_name
            like '%' || :term || '%'
   ```
-- Long predicates may break after the column name, with the operator
-  (`like`) on a continuation line, further indented. *(Out of scope; each
-  condition is emitted whole on one line. Reserved as a future feature.)*
 
 ## Joins
 
@@ -155,6 +138,48 @@ returning *
 - `) as (` closes the column list and opens the body on one line.
 - The body is river-formatted; its closing paren trails the last line
   (`limit 1 )`).
+
+## Subqueries
+
+A parenthesized `select` — as a derived table in `from`, an `in (...)` /
+`exists (...)` predicate operand, or a scalar in the select list — is
+formatted by **recursing the river**: the inner query is laid out exactly as
+a top-level query, with its own river computed from its own clauses, then the
+whole block is shifted right so it nests under the parent.
+
+The rule is uniform across every position a subquery can appear, and there is
+no flattening: a subquery **always breaks** onto its own lines, regardless of
+length. One algorithm, no width threshold, no special cases.
+
+```sql
+  select text
+    from (
+            select id, text
+              from lines
+             where type = 'command'
+               and character_name = ?
+          order by id desc
+             limit 500
+         )
+order by id asc
+```
+
+- The clause keyword holding the subquery (`from`, `where ... in`, a select
+  item) is emitted normally; the open paren trails it on the same line.
+- The inner query starts on the next line. Its river is **independent** —
+  computed from the inner query's own longest left-column item — and the
+  whole inner block is indented so that river sits to the right of the parent
+  content column. The inner query is therefore self-similar: read on its own,
+  it is a correctly river-formatted statement.
+- The closing paren sits on its own line, left-aligned to the inner query's
+  river column.
+- Nesting composes: a subquery inside a subquery applies the same rule again,
+  each level shifting right relative to its parent.
+
+This is the same mechanism as a CTE body (`) as (` … river-formatted body …
+`)`), generalized to any parenthesized select. The only difference is the
+CTE's closing paren trails the last body line (`limit 1 )`) for historical
+reasons; subqueries put the closing paren on its own line.
 
 ## Returning and semicolons
 

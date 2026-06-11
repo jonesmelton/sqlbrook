@@ -48,6 +48,42 @@ let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
       clauses;
     if semi then line (pad (width + 1) ^ ";");
     Buffer.add_string buf (String.concat "\n" (List.rev !lines))
+  | Skeleton.Insert { verb; table; cols; vals; returning; semi } ->
+    let r = width in
+    let lines = ref [] in
+    let line s = lines := s :: !lines in
+    let block close items =
+      List.iteri
+        (fun i { Skeleton.expr; _ } ->
+           let lead = if i = 0 then "( " else ", " in
+           line (pad (r - 1) ^ lead ^ render_tokens expr))
+        items;
+      line close
+    in
+    (* header *)
+    if String.equal verb "insert"
+    then line (verb ^ " into " ^ render_tokens table)
+    else (
+      line verb;
+      line (pad (r - 4) ^ "into " ^ render_tokens table));
+    (* column block: closing paren always on its own line *)
+    block (pad (r - 1) ^ ")") cols;
+    line (pad (r - 6) ^ "values");
+    (* value block: the closing paren shares its line with returning (short
+       river) or the semicolon (no returning); otherwise stands alone *)
+    let close =
+      match returning, r >= String.length "returning", semi with
+      | true, false, _ -> pad (r - 1) ^ ") returning *"
+      | false, _, true -> pad (r - 1) ^ ") ;"
+      | _ -> pad (r - 1) ^ ")"
+    in
+    block close vals;
+    if returning && r >= String.length "returning"
+    then line (pad (r - String.length "returning") ^ "returning *");
+    (* The no-returning semicolon is glued to the closing paren ([") ;"]); only
+       returning statements need the semicolon on its own content-column line. *)
+    if semi && returning then line (pad (r + 1) ^ ";");
+    Buffer.add_string buf (String.concat "\n" (List.rev !lines))
 ;;
 
 let render_stmt (stmt : Skeleton.stmt) : string =

@@ -13,9 +13,9 @@ A formatted select round-trips to exit 0 with no stderr:
 An unsupported construct still echoes on stdout (whole-file integrity) but the
 exit is 3, not 0 — the agent's signal that something was skipped:
 
-  $ printf 'update t set x = 1 where id = :id;' | sqlbrook
-  update t set x = 1 where id = :id;
-  sqlbrook: <stdin>: line 1: update not yet formatted, passed through
+  $ printf 'select a from t having b;' | sqlbrook
+  select a from t having b;
+  sqlbrook: <stdin>: line 1: select not yet formatted, passed through
   [3]
 
 Unlexable input: exit 2, empty stdout, located message plus redirect hint:
@@ -40,9 +40,9 @@ Unlexable input: exit 2, empty stdout, located message plus redirect hint:
 --check where passthrough is present: passthrough wins (3), even though the
 input is also "not formatted":
 
-  $ printf 'update t set x=1;' > unsupported.sql
+  $ printf 'select a from t having b;' > unsupported.sql
   $ sqlbrook --check unsupported.sql
-  sqlbrook: unsupported.sql: line 1: update not yet formatted, passed through
+  sqlbrook: unsupported.sql: line 1: select not yet formatted, passed through
   sqlbrook: unsupported.sql: not formatted
   [3]
 

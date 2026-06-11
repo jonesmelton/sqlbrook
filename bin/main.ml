@@ -175,6 +175,15 @@ let run man write check output files =
 
 open Cmdliner
 
+(* Single source of truth: the version set in dune-project's package stanza.
+   dune-build-info surfaces it at link time; a non-dune build (no version
+   recorded) reports "dev". *)
+let version =
+  match Build_info.V1.version () with
+  | Some v -> Build_info.V1.Version.to_string v
+  | None -> "dev"
+;;
+
 let man =
   let doc =
     "Print the full operational contract (dialect, statement scope, exit codes, \
@@ -246,7 +255,7 @@ let cmd =
            is still emitted unchanged; this status only signals the skip."
     ]
   in
-  let info = Cmd.info "sqlbrook" ~version:"0.1.0" ~doc ~man:man_block ~exits in
+  let info = Cmd.info "sqlbrook" ~version ~doc ~man:man_block ~exits in
   Cmd.v info Term.(const run $ man $ write $ check $ output $ files)
 ;;
 

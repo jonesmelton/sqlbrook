@@ -17,6 +17,7 @@
 
 (package
  (name sqlbrook)
+ (version 0.2.0)
  (synopsis "A whole-statement SQL formatter for the river style")
  (description
   "sqlbrook reformats SQLite SQL into the \"river\" style: lowercase keywords, clause keywords right-aligned to a common river column, leading commas, one expression per line.")
@@ -24,4 +25,5 @@
   (ocaml
    (>= 5.4))
   cmdliner
+  dune-build-info
   (ppx_expect :with-test)))

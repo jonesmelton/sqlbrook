@@ -1,6 +1,6 @@
 (executable
  (name main)
  (public_name sqlbrook)
- (libraries sqlbrook cmdliner)
+ (libraries sqlbrook cmdliner dune-build-info)
  (flags
   (:standard -w +a-4-44-70)))

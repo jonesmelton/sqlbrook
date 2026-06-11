@@ -119,7 +119,11 @@
  (action
   (with-stdout-to
    init.sql.actual
-   (run sqlbrook %{src}))))
+   ; init.sql contains DDL/inserts that pass through, so sqlbrook exits 3
+   ; (the documented passthrough status); the golden diff is what matters.
+   (with-accepted-exit-codes
+    (or 0 3)
+    (run sqlbrook %{src})))))
 
 (rule
  (alias runtest)

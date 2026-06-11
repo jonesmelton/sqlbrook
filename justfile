@@ -24,6 +24,10 @@ watch:
 fmt *files:
     opam exec -- dune exec --no-print-directory sqlbrook -- {{files}}
 
+# build and install the binary to ~/.local/bin
+install: build
+    opam exec -- dune install --prefix ~/.local --sections bin
+
 # remove build artifacts
 clean:
     opam exec -- dune clean

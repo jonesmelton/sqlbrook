@@ -142,34 +142,50 @@ let predicate_kw = function
 
 (* Split a clause into (kw, body) at depth-0 clause keywords; in predicate
    context also at `and`/`or`, except the `and` paired with a depth-0
-   `between`. Raises Unsupported outside the supported grammar. *)
+   `between`. [cases] counts open `case` expressions: between `case` and its
+   `end` nothing splits (case stays inline in its item), so `and`/`or` there
+   join the blob. Raises Unsupported outside the supported grammar. *)
 let to_segments (toks : Token.t list) : (string * Token.t list) list =
-  let rec go toks depth after_between kw body segs =
+  let rec go toks depth after_between cases kw body segs =
     let close () = (kw, List.rev body) :: segs in
     match toks with
     | [] -> List.rev (close ())
-    | Token.Keyword k :: rest when depth = 0 && List.mem k clause_starters ->
-      go rest 0 false k [] (close ())
+    | Token.Keyword k :: rest
+      when depth = 0 && cases = 0 && List.mem k clause_starters ->
+      go rest 0 false 0 k [] (close ())
+    | Token.Keyword "case" :: rest when depth = 0 ->
+      go rest 0 after_between (cases + 1) kw (Token.Keyword "case" :: body) segs
+    | Token.Keyword (("when" | "then" | "else" | "end") as k) :: rest
+      when depth = 0 && cases > 0 ->
+      let cases = if String.equal k "end" then cases - 1 else cases in
+      go rest 0 after_between cases kw (Token.Keyword k :: body) segs
+    | Token.Keyword (("and" | "or") as k) :: rest when depth = 0 && cases > 0 ->
+      (* an `and` here may still be a between's partner; clear the flag so it
+         can't swallow a later depth-0 `and` after the case closes *)
+      let after_between = after_between && not (String.equal k "and") in
+      go rest 0 after_between cases kw (Token.Keyword k :: body) segs
     | Token.Keyword (("and" | "or") as k) :: rest when depth = 0 && predicate_kw kw ->
       if after_between && String.equal k "and"
-      then go rest 0 false kw (Token.Keyword k :: body) segs
-      else go rest 0 false k [] (close ())
+      then go rest 0 false 0 kw (Token.Keyword k :: body) segs
+      else go rest 0 false 0 k [] (close ())
     | Token.Keyword "between" :: rest when depth = 0 ->
-      go rest 0 true kw (Token.Keyword "between" :: body) segs
+      go rest 0 true cases kw (Token.Keyword "between" :: body) segs
     | Token.Keyword "as" :: rest when depth = 0 ->
       (* validated during item splitting; only legal as a select-item alias *)
-      go rest 0 after_between kw (Token.Keyword "as" :: body) segs
+      go rest 0 after_between cases kw (Token.Keyword "as" :: body) segs
     | Token.Keyword k :: rest when depth = 0 && List.mem k expr_kws ->
-      go rest 0 after_between kw (Token.Keyword k :: body) segs
+      go rest 0 after_between cases kw (Token.Keyword k :: body) segs
     | Token.Keyword _ :: _ when depth = 0 -> raise Unsupported
     | Token.Comment _ :: _ -> raise Unsupported
     | Token.RParen :: _ when depth = 0 -> raise Unsupported
-    | (Token.LParen as t) :: rest -> go rest (depth + 1) after_between kw (t :: body) segs
-    | (Token.RParen as t) :: rest -> go rest (depth - 1) after_between kw (t :: body) segs
-    | t :: rest -> go rest depth after_between kw (t :: body) segs
+    | (Token.LParen as t) :: rest ->
+      go rest (depth + 1) after_between cases kw (t :: body) segs
+    | (Token.RParen as t) :: rest ->
+      go rest (depth - 1) after_between cases kw (t :: body) segs
+    | t :: rest -> go rest depth after_between cases kw (t :: body) segs
   in
   match toks with
-  | Token.Keyword k :: rest when List.mem k clause_starters -> go rest 0 false k [] []
+  | Token.Keyword k :: rest when List.mem k clause_starters -> go rest 0 false 0 k [] []
   | _ -> raise Unsupported
 ;;
 

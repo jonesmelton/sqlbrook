@@ -332,6 +332,50 @@ let%expect_test "emit: having joins the river, and/or split like where" =
     |}]
 ;;
 
+let%expect_test "emit: case expressions stay inline" =
+  fmt "select case when x = 1 then 2 else 3 end as y from t;";
+  [%expect
+    {|
+    select case when x = 1 then 2 else 3 end
+        as y
+      from t
+           ;
+    |}];
+  (* and/or inside a depth-0 case do not split predicate river lines *)
+  fmt "select a from t where case when x > 1 and y > 2 then 1 else 0 end = 1 and z = 3;";
+  [%expect
+    {|
+    select a
+      from t
+     where case when x > 1 and y > 2 then 1 else 0 end = 1
+       and z = 3
+           ;
+    |}];
+  (* a between inside the case neither splits nor swallows the outer and *)
+  fmt "select a from t where case when x between 1 and 2 then 1 else 0 end = 1 and z = 3;";
+  [%expect
+    {|
+    select a
+      from t
+     where case when x between 1 and 2 then 1 else 0 end = 1
+       and z = 3
+           ;
+    |}];
+  (* simple-case form (case <operand> when ...) in order by *)
+  fmt "select a from t order by case s when 'a' then 1 else 2 end desc;";
+  [%expect
+    {|
+      select a
+        from t
+    order by case s when 'a' then 1 else 2 end desc
+             ;
+    |}];
+  (* end/when/then/else outside any case stay unsupported -> passthrough *)
+  let r = ok "select end from t;" in
+  Printf.printf "had_passthrough %b\n" r.had_passthrough;
+  [%expect {| had_passthrough true |}]
+;;
+
 let%expect_test "emit: joins set the river, on gets its own line" =
   fmt
     "select r.room_id, m.filename from rooms r inner join maps m on r.map_id = m.map_id \
@@ -563,7 +607,7 @@ let%expect_test "error: unlexable byte is a clean error, not a crash" =
 ;;
 
 let%expect_test "passthrough: unsupported construct emitted unchanged" =
-  let src = "select case when x then 1 else 2 end\n  from t ;\n" in
+  let src = "select a from t union select b from u ;\n" in
   let r = ok src in
   Printf.printf "had_passthrough %b\n" r.had_passthrough;
   Printf.printf "unchanged %b\n" (String.equal r.output src);

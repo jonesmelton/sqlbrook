@@ -24,7 +24,8 @@ A whole-statement SQL formatter for the river style defined in `sql-style.md`. S
 **Behavioral decisions**
 
 - Comments: `--` lines pass through unchanged as statement separators; never reflowed
-- Unknown constructs (`case`, `union`, `having`, anything unparsed): emit the statement unchanged, warn on stderr — never crash, never mangle
+- Unknown constructs (`union`, anything unparsed): emit the statement unchanged, warn on stderr — never crash, never mangle
+- `case` expressions stay inline inside their item (no vertical explosion); their depth-0 `and`/`or`/`when`/`then`/`else`/`end` never split river lines
 - Subqueries: expression position → always inline; clause position (CTE body) → always expanded. No width measurement
 - River width is measured in bytes. Non-ASCII identifiers will misalign visually; accepted limitation (fixing it needs display-width tables, not a different lexer)
 

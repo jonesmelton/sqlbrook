@@ -31,25 +31,20 @@ stderr.
 
 ## Getting started
 
-Requires OCaml >= 5.4. From a fresh clone, create a local switch and pull in
-the dependencies:
-
 ```sh
 opam switch create . 5.4.0 --no-install   # creates ./_opam
 opam install . --deps-only --with-test     # cmdliner, ppx_expect, etc.
 dune build
 ```
 
-Run it directly through dune (note the `--` separating dune's args from the
-program's):
+Run it directly through dune
 
 ```sh
 dune exec sqlbrook -- --help
 dune exec sqlbrook -- --check examples/lore.sql
 ```
 
-Or invoke the built binary at `_build/default/bin/main.exe`, or `dune install`
-to put `sqlbrook` on your switch's PATH.
+`dune install` to put `sqlbrook` on your switch's PATH.
 
 ## Development
 

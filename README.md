@@ -2,6 +2,17 @@
 
 A whole-statement SQL formatter for my personal variant of the "river" style: lowercase everything, clause keywords right-aligned to a common river column, leading commas, one expression per line. SQLite dialect only.
 
+```sql
+  select size
+       , species
+       , hits
+    from bugshields
+   where end_time is null
+order by ts desc
+   limit 1
+         ;
+```
+
 ## Usage
 
 ```sh

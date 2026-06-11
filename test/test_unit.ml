@@ -315,6 +315,23 @@ let%expect_test "emit: predicates one per line, and/or in the river" =
     |}]
 ;;
 
+let%expect_test "emit: having joins the river, and/or split like where" =
+  fmt
+    "select user_id, count(*) as n from events group by user_id having count(*) > 5 and \
+     sum(amount) < 100;";
+  [%expect
+    {|
+      select user_id
+           , count(*)
+          as n
+        from events
+    group by user_id
+      having count(*) > 5
+         and sum(amount) < 100
+             ;
+    |}]
+;;
+
 let%expect_test "emit: joins set the river, on gets its own line" =
   fmt
     "select r.room_id, m.filename from rooms r inner join maps m on r.map_id = m.map_id \

@@ -99,8 +99,9 @@ let clause_starters =
   ; "returning"
   ; "from"
   ; "where"
-  ; "order by"
   ; "group by"
+  ; "having"
+  ; "order by"
   ; "limit"
   ; "on"
   ; "join"
@@ -135,7 +136,7 @@ let expr_kws =
 (* In predicate context `and`/`or` split clauses (one condition per line);
    elsewhere they sit inside the expression blob. *)
 let predicate_kw = function
-  | "where" | "on" | "and" | "or" -> true
+  | "where" | "having" | "on" | "and" | "or" -> true
   | _ -> false
 ;;
 

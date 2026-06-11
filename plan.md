@@ -80,10 +80,10 @@ type stmt =
 1. **Lexer + invariants** *(done)* — tokenize all of `examples/`; lexer roundtrip property test.
 2. **Statement splitter + passthrough** *(done)* — runs end-to-end, passthrough emits exact source slices via token spans; statements joined by one blank line. Nonzero exit on passthrough deferred to milestone 7.
 3. **Core select river** *(done)* — select/from/where/order by/limit, leading commas, `as` lines, semicolon rules, joins + `on`, `and`/`or` river lines (with `between … and` guard). Goldens: `lore.sql`, `items.sql`, `map.sql`, `session.sql` selects.
-4. **Insert/update/returning** — mirror blocks, `into` anchor, multi-word verb break. Goldens: `char.sql`, `vitals.sql` insert, `session.sql`.
-5. **CTEs** — end-shield form, recursive body layout, inline scalar subqueries. Goldens: `bugshield.sql`, `session.sql` play-log.
-6. **DDL** — create table/view. Golden: `init.sql`.
-7. **CLI polish + idempotence sweep** — `fmt (fmt x) = fmt x` over the golden corpus; nonzero exit on passthrough.
+4. **Insert/update/returning** *(done)* — mirror blocks, `into` anchor, multi-word verb break, optional column list. Goldens: `char.sql`, `vitals.sql` insert, `session.sql`.
+5. **CTEs** *(done)* — end-shield form, recursive body layout, inline scalar subqueries. Goldens: `bugshield.sql`, `session.sql` play-log.
+6. **DDL** *(done)* — create table/view. Golden: `init.sql`.
+7. **CLI polish + idempotence sweep** *(done)* — `fmt (fmt x) = fmt x` over the golden corpus; nonzero exit on passthrough; `--check`/`-w`/`-o`/`--man`, exit-code precedence (2 > 3 > 1 > 0).
 
 Each milestone leaves a working tool (passthrough degrades gracefully); the formatter is usable from milestone 3.
 

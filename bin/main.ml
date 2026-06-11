@@ -91,8 +91,11 @@ DIALECT
   reported as unlexable (exit 2), not formatted.
 
 STATEMENTS
-  Laid out:     select
-  Passed through (echoed verbatim, exit 3): insert, update, delete, CTEs, DDL.
+  Laid out:     select, update, insert (incl. or replace), single-CTE
+                queries, create table, create view.
+  Passed through (echoed verbatim, exit 3): delete, set operations (union),
+                multi-CTE queries, having/case, window functions, and other
+                DDL (create index, ...).
 
 EXIT CODES
   0  all inputs fully formatted (or written); nothing passed through
@@ -225,9 +228,10 @@ let cmd =
          keywords right-aligned to a common river column, leading commas, one expression \
          per line. $(b,Dialect: SQLite only.)"
     ; `P
-        "$(b,Lays out:) select. $(b,Passes through) (echoed verbatim, exit 3): insert, \
-         update, delete, CTEs, DDL. Other dialects' syntax is reported as unlexable \
-         (exit 2)."
+        "$(b,Lays out:) select, update, insert, single-CTE queries, create table, create \
+         view. $(b,Passes through) (echoed verbatim, exit 3): delete, set operations, \
+         multi-CTE queries, having/case, window functions, other DDL. Other dialects' \
+         syntax is reported as unlexable (exit 2)."
     ; `P "Run $(b,--man) for the full exit-code and embedded-query contract."
     ; `S Manpage.s_examples
     ; `P "Format files to stdout:"

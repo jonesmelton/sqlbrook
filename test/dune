@@ -1,3 +1,8 @@
+; Cram test for the CLI exit-code contract; needs the binary on PATH.
+
+(cram
+ (deps %{bin:sqlbrook}))
+
 ; Inline ppx_expect tests must live in a library stanza with inline_tests.
 
 (library

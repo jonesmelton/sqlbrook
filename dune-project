@@ -1,5 +1,7 @@
 (lang dune 3.0)
 
+(cram enable)
+
 (generate_opam_files true)
 
 (name sqlbrook)

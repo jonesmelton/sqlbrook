@@ -51,6 +51,18 @@ rule token = parse
   | ['=' '<' '>' '+' '-' '*' '/' '%' '&' '|' '~' '.']
                                             { ROp (Lexing.lexeme lexbuf) }
   | eof                                     { REof }
+  (* Near-miss tokens from other dialects: name them so the caller fixes the
+     dialect, not a phantom stray byte. SQLite has no :: cast or $$-quoting. *)
+  | "::"                                    { raise (Error (Printf.sprintf
+                                                "'::' is not SQLite syntax \
+                                                 (PostgreSQL cast) at offset %d; \
+                                                 dialect is SQLite"
+                                                (Lexing.lexeme_start lexbuf))) }
+  | "$$"                                    { raise (Error (Printf.sprintf
+                                                "'$$' is not SQLite syntax \
+                                                 (PostgreSQL dollar-quote) at offset \
+                                                 %d; dialect is SQLite"
+                                                (Lexing.lexeme_start lexbuf))) }
   | _ as c                                  { raise (Error (Printf.sprintf
                                                 "unexpected byte %C at offset %d"
                                                 c (Lexing.lexeme_start lexbuf))) }

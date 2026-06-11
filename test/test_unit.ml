@@ -199,7 +199,7 @@ let show_stmts src =
   Skeleton.parse src (Lexer.tokens_with_spans src)
   |> List.iter (fun (p : Skeleton.parsed) ->
     match p.stmt with
-    | Skeleton.Passthrough s -> Printf.printf "passthrough %S\n" s
+    | Skeleton.Passthrough { source; _ } -> Printf.printf "passthrough %S\n" source
     | _ -> print_endline "parsed")
 ;;
 
@@ -230,7 +230,14 @@ let%expect_test "skeleton: statements split at top-level semicolons" =
   [%expect {| |}]
 ;;
 
-let fmt src = print_string (Pipeline.format src).output
+(* Unwrap a format expected to succeed; the lex-error path has its own test. *)
+let ok src =
+  match Pipeline.format src with
+  | Ok r -> r
+  | Error msg -> failwith ("unexpected lex error: " ^ msg)
+;;
+
+let fmt src = print_string (ok src).output
 
 let%expect_test "emit: select river layout" =
   (* river width from the longest clause keyword; leading commas; semicolon
@@ -253,6 +260,22 @@ let%expect_test "emit: select river layout" =
     {|
     select a
       from t
+    |}]
+;;
+
+(* Embedded-query convention: queries live in a leading-newline string literal
+   (sql`\n...`) so the river sits at column 0 and the agent never re-indents.
+   The leading newline must be absorbed — output identical to the bare query —
+   and the result must itself start at column 0. *)
+let%expect_test "emit: leading newline absorbed (embedded-query convention)" =
+  let bare = (ok "select a, b from t where x = :x;").output in
+  let lead = (ok "\nselect a, b from t where x = :x;\n").output in
+  Printf.printf "identical %b\n" (String.equal bare lead);
+  Printf.printf "starts at col 0 %b\n" (String.length lead > 0 && lead.[0] <> ' ');
+  [%expect
+    {|
+    identical true
+    starts at col 0 true
     |}]
 ;;
 
@@ -320,9 +343,19 @@ let%expect_test "emit: comments precede the statement unchanged" =
     |}]
 ;;
 
+let%expect_test "error: unlexable byte is a clean error, not a crash" =
+  (* An agent feeding non-SQL (control chars, stray binary, host interpolation
+     that is not a bind parameter) must get a recoverable error with a located
+     message, never an uncaught exception. *)
+  (match Pipeline.format "select \x01 from t;" with
+   | Ok _ -> print_endline "unexpected Ok"
+   | Error msg -> Printf.printf "Error: %s\n" msg);
+  [%expect {| Error: unexpected byte '\001' at offset 7 |}]
+;;
+
 let%expect_test "passthrough: unsupported construct emitted unchanged" =
   let src = "select case when x then 1 else 2 end\n  from t ;\n" in
-  let r = Pipeline.format src in
+  let r = ok src in
   Printf.printf "had_passthrough %b\n" r.had_passthrough;
   Printf.printf "unchanged %b\n" (String.equal r.output src);
   [%expect
@@ -350,7 +383,7 @@ let foreach_example f =
 let%expect_test "invariant: token preservation" =
   foreach_example (fun file src ->
     let toks = Lexer.tokens_of_string src in
-    let toks' = Lexer.tokens_of_string (Pipeline.format src).output in
+    let toks' = Lexer.tokens_of_string (ok src).output in
     let ok =
       List.length toks = List.length toks' && List.for_all2 Token.equal toks toks'
     in
@@ -371,8 +404,8 @@ let%expect_test "invariant: token preservation" =
 (* Invariant: formatting is a fixed point after the first application. *)
 let%expect_test "invariant: idempotence" =
   foreach_example (fun file src ->
-    let once = (Pipeline.format src).output in
-    let twice = (Pipeline.format once).output in
+    let once = (ok src).output in
+    let twice = (ok once).output in
     Printf.printf "%-15s %s\n" file (if String.equal once twice then "ok" else "FAILED"));
   [%expect
     {|

@@ -18,7 +18,11 @@ type stmt =
       { clauses : clause list
       ; semi : bool
       }
-  | Passthrough of string
+  | Passthrough of
+      { source : string
+      ; kind : string
+      ; offset : int
+      }
 
 type parsed =
   { comments : string list
@@ -193,10 +197,17 @@ let parse_select (toks : Token.t list) : stmt =
 let parse (src : string) (toks : (Token.t * span) list) : parsed list =
   split toks
   |> List.map (fun chunk ->
-    let passthrough () =
+    let passthrough body =
       let start, _ = snd (List.hd chunk) in
       let _, stop = snd (List.hd (List.rev chunk)) in
-      { comments = []; stmt = Passthrough (String.sub src start (stop - start)) }
+      let kind =
+        match body with
+        | (Token.Keyword k, _) :: _ -> k
+        | (tok, _) :: _ -> Token.to_string tok
+        | [] -> ""
+      in
+      let source = String.sub src start (stop - start) in
+      { comments = []; stmt = Passthrough { source; kind; offset = start } }
     in
     let rec strip_comments acc = function
       | (Token.Comment c, _) :: rest -> strip_comments (c :: acc) rest
@@ -206,6 +217,6 @@ let parse (src : string) (toks : (Token.t * span) list) : parsed list =
     match body with
     | (Token.Keyword "select", _) :: _ ->
       (try { comments; stmt = parse_select (List.map fst body) } with
-       | Unsupported -> passthrough ())
-    | _ -> passthrough ())
+       | Unsupported -> passthrough body)
+    | _ -> passthrough body)
 ;;

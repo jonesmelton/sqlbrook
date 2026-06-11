@@ -13,7 +13,11 @@ type stmt =
       { clauses : clause list
       ; semi : bool
       }
-  | Passthrough of string
+  | Passthrough of
+      { source : string (* exact source slice, emitted verbatim *)
+      ; kind : string (* leading keyword, lowercased, for diagnostics *)
+      ; offset : int (* byte offset of the statement's first token *)
+      }
 
 type parsed =
   { comments : string list

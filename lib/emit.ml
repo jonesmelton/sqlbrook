@@ -29,7 +29,7 @@ let pad (n : int) : string = String.make (max 0 n) ' '
 
 let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
   match stmt with
-  | Skeleton.Passthrough s -> Buffer.add_string buf s
+  | Skeleton.Passthrough { source; _ } -> Buffer.add_string buf source
   | Skeleton.Dml { clauses; semi } ->
     let lines = ref [] in
     let line s = lines := s :: !lines in

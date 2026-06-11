@@ -3,17 +3,21 @@
    paren depth; paren-balanced spans become opaque expression blobs. Anything
    it can't classify becomes Passthrough. *)
 
-type item =
-  { expr : Token.t list
+type item_body =
+  | Blob of Token.t list
+  | Sub of stmt (* a parsed inner select; always laid out as a nested block *)
+
+and item =
+  { expr : item_body
   ; alias : string option
   }
 
-type clause =
+and clause =
   { kw : string
   ; items : item list
   }
 
-type stmt =
+and stmt =
   | Dml of
       { clauses : clause list
       ; semi : bool
@@ -25,6 +29,12 @@ type stmt =
       ; vals : item list
       ; returning : bool
       ; semi : bool
+      }
+  | Cte of
+      { name : string
+      ; cols : item list
+      ; body : stmt
+      ; outer : stmt
       }
   | Passthrough of
       { source : string
@@ -142,9 +152,38 @@ let to_segments (toks : Token.t list) : (string * Token.t list) list =
   | _ -> raise Unsupported
 ;;
 
+(* Consume a parenthesized group at the head of [toks]; return its inner
+   tokens (parens stripped) and the remainder. Raises Unsupported if [toks]
+   does not start with a balanced group. *)
+let take_paren_group (toks : Token.t list) : Token.t list * Token.t list =
+  match toks with
+  | Token.LParen :: rest ->
+    let rec go depth acc = function
+      | Token.RParen :: rest when depth = 0 -> List.rev acc, rest
+      | (Token.LParen as t) :: rest -> go (depth + 1) (t :: acc) rest
+      | (Token.RParen as t) :: rest -> go (depth - 1) (t :: acc) rest
+      | t :: rest -> go depth (t :: acc) rest
+      | [] -> raise Unsupported
+    in
+    go 0 [] rest
+  | _ -> raise Unsupported
+;;
+
+(* An item that is exactly one balanced paren group whose first token is
+   `select` is a subquery; `foo(...)` and `(a + b) * c` have a different head
+   or a non-empty remainder and stay blobs. *)
+let subquery_tokens (toks : Token.t list) : Token.t list option =
+  match toks with
+  | Token.LParen :: _ ->
+    (match take_paren_group toks with
+     | (Token.Keyword "select" :: _ as inner), [] -> Some inner
+     | _ -> None)
+  | _ -> None
+;;
+
 (* Split a comma-list clause body into items at depth-0 commas. A trailing
    `as <name>` at depth 0 becomes the item alias (select lists only). *)
-let to_items ~(aliases : bool) (body : Token.t list) : item list =
+let rec to_items ~(aliases : bool) (body : Token.t list) : item list =
   let split_commas toks =
     let rec go toks depth cur items =
       match toks with
@@ -178,10 +217,11 @@ let to_items ~(aliases : bool) (body : Token.t list) : item list =
          strip_parens 0 [] expr)
     in
     if has_as || expr = [] then raise Unsupported;
-    { expr; alias })
-;;
+    match subquery_tokens expr with
+    | Some inner -> { expr = Sub (parse_select inner); alias }
+    | None -> { expr = Blob expr; alias })
 
-let parse_select (toks : Token.t list) : stmt =
+and parse_select (toks : Token.t list) : stmt =
   let toks, semi =
     match List.rev toks with
     | Token.Semicolon :: rev_rest -> List.rev rev_rest, true
@@ -201,23 +241,6 @@ let parse_select (toks : Token.t list) : stmt =
       { kw; items })
   in
   Dml { clauses; semi }
-;;
-
-(* Consume a parenthesized group at the head of [toks]; return its inner
-   tokens (parens stripped) and the remainder. Raises Unsupported if [toks]
-   does not start with a balanced group. *)
-let take_paren_group (toks : Token.t list) : Token.t list * Token.t list =
-  match toks with
-  | Token.LParen :: rest ->
-    let rec go depth acc = function
-      | Token.RParen :: rest when depth = 0 -> List.rev acc, rest
-      | (Token.LParen as t) :: rest -> go (depth + 1) (t :: acc) rest
-      | (Token.RParen as t) :: rest -> go (depth - 1) (t :: acc) rest
-      | t :: rest -> go depth (t :: acc) rest
-      | [] -> raise Unsupported
-    in
-    go 0 [] rest
-  | _ -> raise Unsupported
 ;;
 
 (* insert [or replace] into <table> ( cols ) values ( vals ) [returning *] [;] *)
@@ -263,6 +286,38 @@ let parse_insert (toks : Token.t list) : stmt =
   Insert { verb; table; cols; vals; returning; semi }
 ;;
 
+(* with <name> [( cols )] as ( body ) <outer dml> [;]
+   Single CTE only; multiple CTEs are Unsupported and pass through. *)
+let parse_cte (toks : Token.t list) : stmt =
+  let name, rest =
+    match toks with
+    | Token.Keyword "with" :: Token.Ident name :: rest -> name, rest
+    | _ -> raise Unsupported
+  in
+  let cols, rest =
+    match rest with
+    | Token.LParen :: _ ->
+      let col_toks, rest = take_paren_group rest in
+      to_items ~aliases:false col_toks, rest
+    | _ -> [], rest
+  in
+  let body_toks, rest =
+    match rest with
+    | Token.Keyword "as" :: rest -> take_paren_group rest
+    | _ -> raise Unsupported
+  in
+  (match body_toks with
+   | Token.Keyword "select" :: _ -> ()
+   | _ -> raise Unsupported);
+  let outer =
+    match rest with
+    | Token.Keyword ("select" | "update") :: _ -> parse_select rest
+    | Token.Keyword ("insert" | "insert or replace") :: _ -> parse_insert rest
+    | _ -> raise Unsupported
+  in
+  Cte { name; cols; body = parse_select body_toks; outer }
+;;
+
 (* Plain selects become Dml; everything else is Passthrough (the source slice
    from the chunk's first token to its last). *)
 let parse (src : string) (toks : (Token.t * span) list) : parsed list =
@@ -291,6 +346,9 @@ let parse (src : string) (toks : (Token.t * span) list) : parsed list =
        | Unsupported -> passthrough body)
     | (Token.Keyword ("insert" | "insert or replace"), _) :: _ ->
       (try { comments; stmt = parse_insert (List.map fst body) } with
+       | Unsupported -> passthrough body)
+    | (Token.Keyword "with", _) :: _ ->
+      (try { comments; stmt = parse_cte (List.map fst body) } with
        | Unsupported -> passthrough body)
     | _ -> passthrough body)
 ;;

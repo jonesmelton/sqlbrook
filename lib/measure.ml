@@ -14,5 +14,9 @@ let river_width (stmt : Skeleton.stmt) : int =
     if String.equal verb "insert"
     then String.length "insert into"
     else String.length "values"
+  | Skeleton.Cte _ ->
+    (* governs only the header's column block; body and outer statement
+       compute their own rivers *)
+    String.length "with"
   | Skeleton.Passthrough _ -> 0
 ;;

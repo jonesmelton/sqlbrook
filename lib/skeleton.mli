@@ -1,14 +1,18 @@
-type item =
-  { expr : Token.t list
+type item_body =
+  | Blob of Token.t list (* opaque expression, rendered on one line *)
+  | Sub of stmt (* parenthesized select, laid out recursively *)
+
+and item =
+  { expr : item_body
   ; alias : string option
   }
 
-type clause =
+and clause =
   { kw : string
   ; items : item list
   }
 
-type stmt =
+and stmt =
   | Dml of
       { clauses : clause list
       ; semi : bool
@@ -20,6 +24,12 @@ type stmt =
       ; vals : item list
       ; returning : bool
       ; semi : bool
+      }
+  | Cte of
+      { name : string
+      ; cols : item list
+      ; body : stmt
+      ; outer : stmt (* trailing update/select; carries the semicolon *)
       }
   | Passthrough of
       { source : string (* exact source slice, emitted verbatim *)

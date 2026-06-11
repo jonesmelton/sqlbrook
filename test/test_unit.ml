@@ -331,6 +331,114 @@ let%expect_test "emit: joins set the river, on gets its own line" =
     |}]
 ;;
 
+let%expect_test "emit: subquery recurses the river (golden: history query)" =
+  fmt
+    "select text from (select id, text from lines where type = 'command' and \
+     character_name = ? order by id desc limit 500) order by id asc";
+  [%expect
+    {|
+      select text
+        from (
+                select id
+                     , text
+                  from lines
+                 where type = 'command'
+                   and character_name = ?
+              order by id desc
+                 limit 500
+             )
+    order by id asc
+    |}]
+;;
+
+let%expect_test "emit: scalar subqueries in the select list keep their aliases" =
+  fmt
+    "select (select count(*) from sessions) as total, (select count(*) from sessions \
+     where ts > :since) as recent;";
+  [%expect
+    {|
+    select (
+            select count(*)
+              from sessions
+           )
+        as total
+         , (
+            select count(*)
+              from sessions
+             where ts > :since
+           )
+        as recent
+           ;
+    |}]
+;;
+
+let%expect_test "emit: nested subqueries shift right level by level" =
+  fmt "select a from (select a from (select a, b from t where b > 1) where a < 5)";
+  [%expect
+    {|
+    select a
+      from (
+            select a
+              from (
+                    select a
+                         , b
+                      from t
+                     where b > 1
+                   )
+             where a < 5
+           )
+    |}]
+;;
+
+let%expect_test "emit: function calls and predicate subqueries are not blocks" =
+  (* an Ident before the paren keeps a call a blob *)
+  fmt "select count(*) from t;";
+  [%expect
+    {|
+    select count(*)
+      from t
+           ;
+    |}];
+  (* predicate-position subqueries (in/exists operands) are glued to their
+     expression and stay blobs; documented punt in sql-style.md *)
+  fmt "select a from t where x in (select x from u);";
+  [%expect
+    {|
+    select a
+      from t
+     where x in (select x from u)
+           ;
+    |}]
+;;
+
+let%expect_test "emit: cte is the same recursive block (golden: bugshield close)" =
+  fmt
+    "with current (rowid, ts, end_time) as (select rowid, ts, end_time from bugshields \
+     where end_time is null order by ts desc limit 1) update bugshields set end_time = \
+     time('now') where rowid = (select rowid from current) returning *;";
+  [%expect
+    {|
+    with current
+       ( rowid
+       , ts
+       , end_time
+       ) as (
+            select rowid
+                 , ts
+                 , end_time
+              from bugshields
+             where end_time is null
+          order by ts desc
+             limit 1
+         )
+       update bugshields
+          set end_time = time('now')
+        where rowid = (select rowid from current)
+    returning *
+              ;
+    |}]
+;;
+
 let%expect_test "emit: comments precede the statement unchanged" =
   fmt "--name: find\n--fn: first\nselect a from t;";
   [%expect

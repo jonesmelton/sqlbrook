@@ -111,21 +111,27 @@ The river style, as realized in `examples/*.sql`.
 
 ## CTEs
 
-Canonical form is `bugshield.sql` end-shield:
+A CTE is a `with` header (a named, leading-comma column list and an `as (`
+opener) wrapping a body that is **the same recursive subquery block** as
+everywhere else — it indents under its paren with its own independent river,
+and its closing paren sits on its own line. After the close paren, the outer
+statement (`update` / `select`) resumes as a normal top-level statement with
+its own river, anchored at the left margin.
 
 ```sql
-     with current
-        ( rowid
-        , ts
-        , end_time
-        ) as (
-   select rowid
-        , ts
-        , end_time
-     from bugshields
-    where end_time is null
- order by ts desc
-  limit 1 )
+with current
+   ( rowid
+   , ts
+   , end_time
+   ) as (
+        select rowid
+             , ts
+             , end_time
+          from bugshields
+         where end_time is null
+      order by ts desc
+         limit 1
+     )
    update bugshields
       set end_time = time('now')
     where rowid = (select rowid from current)
@@ -133,11 +139,15 @@ returning *
           ;
 ```
 
-- `with name` on a river line; the explicit column list uses the same
-  leading-comma paren block as inserts, aligned to the statement river.
+- `with name` on the first line; the explicit column list uses the same
+  leading-comma paren block as inserts.
 - `) as (` closes the column list and opens the body on one line.
-- The body is river-formatted; its closing paren trails the last line
-  (`limit 1 )`).
+- The column list is optional: without one, the header collapses to
+  `with <name> as (` on a single line and the body follows the same rule.
+- The body follows the Subqueries rule exactly: own river, indented under the
+  paren, closing paren on its own line. No special CTE body layout.
+- The outer statement begins on the line after the close paren, formatted as
+  a normal top-level statement (its own river, anchored at the left margin).
 
 ## Subqueries
 
@@ -154,7 +164,8 @@ length. One algorithm, no width threshold, no special cases.
 ```sql
   select text
     from (
-            select id, text
+            select id
+                 , text
               from lines
              where type = 'command'
                and character_name = ?
@@ -176,10 +187,16 @@ order by id asc
 - Nesting composes: a subquery inside a subquery applies the same rule again,
   each level shifting right relative to its parent.
 
-This is the same mechanism as a CTE body (`) as (` … river-formatted body …
-`)`), generalized to any parenthesized select. The only difference is the
-CTE's closing paren trails the last body line (`limit 1 )`) for historical
-reasons; subqueries put the closing paren on its own line.
+This is the same mechanism a CTE body uses (see CTEs): one recursive block
+rule for every parenthesized select, whether it's a derived table, a
+predicate operand, a scalar in the select list, or a `with ... as (...)`
+body.
+
+> Implementation note: predicate-position subqueries (`in (...)`,
+> `exists (...)`, `= (...)`) are not yet recursed — the operand is glued to
+> its expression and stays on one line. The block rule above is the target;
+> today derived tables, select-list scalars, insert values, and CTE bodies
+> break.
 
 ## Returning and semicolons
 

@@ -12,8 +12,7 @@ insert into sessions
           , :guildspec
           , :name
           , :role
-          )
-  returning *
+          ) returning *
             ;
 
 --name: current
@@ -57,14 +56,12 @@ select data
        ;
 
 --name: play-log
-  with recent_vitals
-    as (
-select max(rowid)
-       as last
-  from vitals
- where name = :char_name
-       )
-
+with recent_vitals as (
+      select max(rowid)
+          as last
+        from vitals
+       where name = :char_name
+     )
 insert into logs.play
           ( char_name
           , mud_data
@@ -77,5 +74,8 @@ insert into logs.play
           , :mud_data
           , :room_id
           , :gmcp
-          , (select last from recent_vitals)
+          , (
+             select last
+               from recent_vitals
+            )
           ) ;

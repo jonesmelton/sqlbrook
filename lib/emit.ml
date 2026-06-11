@@ -1,14 +1,5 @@
-(* Emit pass: render a parsed statement to formatted SQL text.
-
-   Manual right-padding into a Buffer — no Format boxes, since the river needs
-   exact column control. Implements: clause river with leading-comma lists,
-   `as` on its own line, and the semicolon rule (own line in content column).
-   Insert mirror blocks, CTE end-shield form, and DDL land with their
-   milestones. Passthrough statements are emitted verbatim. *)
-
-(* Render an opaque expression blob on one line. Spacing rules: glue closing
-   delimiters and commas to the previous token, glue after an open paren, and
-   glue a function name to its open paren; otherwise single spaces. *)
+(* Glue closing delimiters and commas to the previous token, glue after an
+   open paren, glue a function name to its open paren; else single spaces. *)
 let render_tokens (toks : Token.t list) : string =
   let buf = Buffer.create 64 in
   let emit prev t =
@@ -36,8 +27,6 @@ let render_tokens (toks : Token.t list) : string =
 
 let pad (n : int) : string = String.make (max 0 n) ' '
 
-(* Format a single statement given its precomputed river width. Lines are
-   newline-terminated except the last. *)
 let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
   match stmt with
   | Skeleton.Passthrough s -> Buffer.add_string buf s
@@ -63,7 +52,6 @@ let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
     failwith "Emit.emit_stmt: not implemented"
 ;;
 
-(* Render one statement, measuring its river width. *)
 let render_stmt (stmt : Skeleton.stmt) : string =
   let buf = Buffer.create 256 in
   emit_stmt buf (Measure.river_width stmt) stmt;

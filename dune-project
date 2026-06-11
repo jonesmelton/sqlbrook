@@ -2,6 +2,10 @@
 
 (name sqlbrook)
 
+(license MIT)
+
+(authors "Jones Melton")
+
 (package
  (name sqlbrook)
  (synopsis "A whole-statement SQL formatter for the river style")

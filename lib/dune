@@ -1,11 +1,8 @@
 (library
  (name sqlbrook)
  (public_name sqlbrook)
- ; 26/27/32 (unused var/value) are silenced while the pipeline is stubbed;
- ; remove those once the modules carry real implementations.
- ; 4 (fragile-match) and 70 (missing-mli) are silenced permanently: wildcard
- ; matches over closed local types are fine, and the library exposes no .mli.
+ ; 4: wildcard matches over closed local types are fine. 70: no .mli exposed.
  (flags
-  (:standard -w +a-4-26-27-32-70)))
+  (:standard -w +a-4-70)))
 
 (ocamllex lexer)

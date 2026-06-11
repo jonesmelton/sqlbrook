@@ -1,10 +1,12 @@
-# SQL style conventions (seed spec)
+# SQL style conventions
 
-Derived from `examples/*.sql`. Describes the dominant style; outliers noted at the end.
+The river style, as realized in `examples/*.sql`.
 
 ## Core principles
 
-1. **All lowercase.** Keywords, functions, identifiers — everything. No exceptions in the corpus.
+1. **Lowercase.** Keywords are emitted lowercase. Identifiers pass through as
+   written (the corpus is all lowercase); the formatter does not downcase them,
+   since quoted identifiers are case-sensitive in SQLite.
 2. **River alignment.** Top-level clause keywords are right-aligned to a common
    column, forming a vertical "river" of whitespace after them. Content starts
    one space after the river.
@@ -72,8 +74,8 @@ Derived from `examples/*.sql`. Describes the dominant style; outliers noted at t
            like '%' || :term || '%'
   ```
 - Long predicates may break after the column name, with the operator
-  (`like`) on a continuation line, further indented. *(Cut from the MVP
-  formatter — see Resolved third pass #1; reserved as a future feature.)*
+  (`like`) on a continuation line, further indented. *(Out of scope; each
+  condition is emitted whole on one line. Reserved as a future feature.)*
 
 ## Joins
 
@@ -211,47 +213,11 @@ char_name text
 - Nested indentation (e.g. `on conflict ignore` under `unique`) is punted
   for now.
 
-## Resolved decisions
+## Statement separation
 
-1. **Semicolon**: own line indented past the river; if the statement ends
-   with a closing paren, paren and `;` share a line across the river (`) ;`).
-2. **`values`**: own river-aligned line (bugshield form), open paren taking
-   the comma position on the next line (`( :name`).
-3. **Insert river**: ends at the right edge of `into`; multi-word verb
-   phrases (`insert or replace`) break before `into`.
-4. **CTE**: bugshield end-shield form is canonical.
-5. **DDL indentation**: one level = blank left-of-river (create-table-skills
-   form); nested indentation punted.
-
-## Resolved (2026-06-10, second pass)
-
-1. **River width** = length of the longest left-column expression in the
-   query, in both DML and DDL. No extra padding.
-2. **DDL closing** conforms to the DML `) ;` rule; the glued `);` in the
-   earlier corpus was an oversight.
-3. **`=` vs `is`** and similar token choices are out of scope — the
-   formatter is layout-only.
-4. **Placeholders**: all sqlite forms must be handled (`:name`, `@name`,
-   `$name`, `?NNN`, bare `?`).
-5. **Statement separation** (resolved 2026-06-10, milestone 2): exactly one
-   blank line between statements, no blank lines at the start of a file, one
-   trailing newline at the end. Comment lines (`--`) belong to the statement
-   they precede. The leading blank in session.sql and the double blank in
-   bugshield.sql were oversights, fixed by promotion.
-
-The example corpus has been edited to conform; previously flagged
-inconsistencies are fixed.
-
-## Resolved (2026-06-10, third pass — milestone 3 promotion)
-
-1. **Predicate breaking after the column name is cut from the MVP**: each
-   condition is emitted whole on one line. The broken forms in `lore.sql`
-   and `items.sql` were joined by promotion; the style remains documented
-   above as a future feature.
-2. **session.sql "current"** used river width 9 (matching the adjacent
-   `end` statement's `returning`) though its own longest keyword is
-   `order by` (8). Per second-pass #1 (width = longest keyword in the
-   query, no extra padding) it was re-promoted at width 8.
+- Exactly one blank line between statements; no blank lines at the start of a
+  file; one trailing newline at the end.
+- Comment lines (`--`) belong to the statement they precede.
 
 ## Divergences from Holywell (sqlstyle.guide)
 

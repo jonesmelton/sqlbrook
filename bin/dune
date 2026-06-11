@@ -2,6 +2,5 @@
  (name main)
  (public_name sqlbrook)
  (libraries sqlbrook)
- ; unused-value/var silenced while main is stubbed; remove with real logic.
  (flags
-  (:standard -w +a-26-27-32)))
+  (:standard -w +a-4-70)))

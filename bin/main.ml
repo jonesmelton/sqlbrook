@@ -1,11 +1,3 @@
-(* CLI entry point.
-
-   Reads stdin or file args, writes formatted SQL to stdout. Warns on stderr
-   when statements fall back to passthrough. A nonzero exit for passthrough
-   (to gate CI) is deferred to the CLI-polish milestone: while layout stages
-   are unimplemented everything passes through, and a nonzero exit would fail
-   every golden rule. In-place editing (-i) is deferred. *)
-
 let read_all (ic : in_channel) : string =
   let buf = Buffer.create 4096 in
   (try

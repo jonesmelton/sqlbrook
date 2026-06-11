@@ -1,13 +1,3 @@
-(* Unit-level snapshots and invariants (ppx_expect).
-
-   Covers: multi-word keyword lexing, placeholder forms, quoted identifiers
-   and >= 0x80 bytes, individual clause layouts, passthrough-with-warning
-   behavior, and the cross-cutting invariants:
-     - token preservation:  lex (fmt x) = lex x
-     - idempotence:         fmt (fmt x) = fmt x
-
-   Layout cases for insert/CTE/DDL land with their milestones. *)
-
 open Sqlbrook
 
 let describe = function
@@ -26,9 +16,8 @@ let describe = function
 
 let show s = List.iter (fun t -> print_endline (describe t)) (Lexer.tokens_of_string s)
 
-(* Render tokens back to flat text: space-separated, newline after comments so
-   a comment never swallows the following tokens. Stand-in for fmt until the
-   layout milestones land. *)
+(* Flat token text, newline after comments so a comment never swallows the
+   following tokens. Used by the lexer-roundtrip invariant. *)
 let render toks =
   let buf = Buffer.create 256 in
   List.iter
@@ -171,9 +160,7 @@ let%expect_test "lexer: comments, operators, numbers" =
     |}]
 ;;
 
-(* Invariant (lexer-level, corpus-wide): re-lexing the flat rendering of the
-   token stream reproduces the token stream. Once fmt exists this is
-   strengthened to lex (fmt x) = lex x. *)
+(* Re-lexing the flat rendering of the token stream reproduces it. *)
 let%expect_test "invariant: lexer roundtrip over examples corpus" =
   let dir = "../examples" in
   Sys.readdir dir

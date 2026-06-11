@@ -1,32 +1,24 @@
-(* Skeleton parser: recursive descent, no menhir, no expression parsing.
+(* Recursive descent, no menhir, no expression parsing. Splits the token
+   stream into statements and each statement into clauses/items, tracking
+   paren depth; paren-balanced spans become opaque expression blobs. Anything
+   it can't classify becomes Passthrough. *)
 
-   Splits a token stream into statements, and each statement into clauses /
-   items, tracking paren depth. Clause bodies split at top-level commas;
-   paren-balanced spans are captured as opaque expression blobs. Recognizes:
-   trailing `as <name>` on list items, CTE prologue (`with name ( cols ) as (`),
-   insert column/values blocks, and DDL column defs. Anything it can't classify
-   becomes Passthrough. *)
-
-(* A list item: an opaque expression blob with an optional trailing alias. *)
 type item =
   { expr : Token.t list
   ; alias : string option
   }
 
-(* A river-participating clause: the keyword occupies the left column. *)
 type clause =
   { kw : string
   ; items : item list
   }
 
-(* A DDL column definition. Name participates in the river; the rest
-   (type + constraints) is opaque token text laid out in the content column. *)
 type coldef =
   { name : string
-  ; rest : Token.t list
+  ; rest : Token.t list (* type + constraints, opaque *)
   }
 
-(* A CTE prologue in end-shield form: `with name ( cols ) as ( <body> )`. *)
+(* CTE prologue in end-shield form: `with name ( cols ) as ( <body> )`. *)
 type cte =
   { name : string
   ; cols : string list
@@ -37,33 +29,30 @@ type stmt =
   | Dml of
       { cte : cte option
       ; clauses : clause list
-      ; semi : bool (* trailing semicolon present in source *)
+      ; semi : bool
       }
   | Insert of
-      { verb : string list (* e.g. ["insert"] or ["insert"; "or"; "replace"] *)
+      { verb : string list
       ; table : string
       ; cols : string list option
       ; values : item list
-      ; tail : clause list (* returning, on conflict, etc. *)
+      ; tail : clause list
       }
   | Ddl of
       { table : string
       ; defs : coldef list
       }
-  | Passthrough of string (* exact source slice, emitted unchanged *)
+  | Passthrough of string
 
-(* A statement plus the comment lines that precede it. For Passthrough the
-   comments stay inside the source slice and the list is empty. *)
 type parsed =
   { comments : string list
   ; stmt : stmt
   }
 
-type span = int * int (* byte offsets into the source: (start, end) *)
+type span = int * int
 
-(* Split the token stream into statements at depth-0 semicolons. Comments
-   attach to the following statement (they precede it in source order); a
-   trailing comment with no following statement forms its own chunk. *)
+(* Comments attach to the following statement; a trailing comment with no
+   following statement forms its own chunk. *)
 let split (toks : (Token.t * span) list) : (Token.t * span) list list =
   let rec go toks depth cur chunks =
     match toks with
@@ -85,7 +74,6 @@ let split (toks : (Token.t * span) list) : (Token.t * span) list list =
 
 exception Unsupported
 
-(* Keywords that open a river clause in a select statement (milestone-3 set). *)
 let clause_starters =
   [ "select"
   ; "from"
@@ -104,8 +92,8 @@ let clause_starters =
   ]
 ;;
 
-(* Keywords that may appear inside an expression blob at paren depth 0.
-   Anything else at depth 0 means a construct we don't lay out yet. *)
+(* Keywords allowed inside an expression blob at depth 0; anything else at
+   depth 0 is a construct we don't lay out yet. *)
 let expr_kws =
   [ "is"
   ; "not"
@@ -123,17 +111,16 @@ let expr_kws =
   ]
 ;;
 
-(* Conditions live one per line with `and`/`or` river-aligned, so those
-   keywords split clauses — but only in predicate context. *)
+(* In predicate context `and`/`or` split clauses (one condition per line);
+   elsewhere they sit inside the expression blob. *)
 let predicate_kw = function
   | "where" | "on" | "and" | "or" -> true
   | _ -> false
 ;;
 
-(* Split a clause into (kw, body) segments at depth-0 clause keywords; in
-   predicate context also at `and`/`or` (except the `and` paired with a
-   depth-0 `between`). Raises Unsupported on anything outside the
-   milestone-3 grammar. *)
+(* Split a clause into (kw, body) at depth-0 clause keywords; in predicate
+   context also at `and`/`or`, except the `and` paired with a depth-0
+   `between`. Raises Unsupported outside the supported grammar. *)
 let to_segments (toks : Token.t list) : (string * Token.t list) list =
   let rec go toks depth after_between kw body segs =
     let close () = (kw, List.rev body) :: segs in
@@ -225,8 +212,8 @@ let parse_select (toks : Token.t list) : stmt =
   Dml { cte = None; clauses; semi }
 ;;
 
-(* Classify each statement. Plain selects become Dml; everything else is
-   Passthrough: the source slice from the chunk's first token to its last. *)
+(* Plain selects become Dml; everything else is Passthrough (the source slice
+   from the chunk's first token to its last). *)
 let parse (src : string) (toks : (Token.t * span) list) : parsed list =
   split toks
   |> List.map (fun chunk ->

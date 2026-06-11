@@ -1,14 +1,6 @@
-(* Byte-oriented lexer for SQLite.
-
-   Tokenizes into Token.t. Keywords (including multi-word forms like
-   "order by", "insert or replace", "if not exists") are recognized with
-   lookahead against a fixed closed list, matched case-insensitively, and
-   emitted lowercase. UTF-8 / non-ASCII bytes pass through inside idents,
-   quoted strings, and quoted identifiers via the ['\x80'-'\xff'] class. *)
-
 {
-  (* Raw tokens before multi-word keyword assembly. Words are classified as
-     Keyword/Ident only after phrase lookahead in the trailer. *)
+  (* Words are classified Keyword/Ident only after phrase lookahead in the
+     trailer, so a raw pre-classification token is needed first. *)
   type raw =
     | RWord of string
     | RQuoted of string
@@ -31,8 +23,8 @@ let hex = ['0'-'9' 'a'-'f' 'A'-'F']
 let ident_start = ['a'-'z' 'A'-'Z' '_' '\x80'-'\xff']
 let ident_char = ['a'-'z' 'A'-'Z' '0'-'9' '_' '$' '\x80'-'\xff']
 let bare_ident = ident_start ident_char*
-(* Qualified names (schema.table, alias.column) lex as a single word so the
-   layout passes never have to reason about spacing around dots. *)
+(* Qualified names (schema.table) lex as one word so layout never reasons
+   about spacing around dots. *)
 let word = bare_ident ('.' bare_ident)*
 
 rule token = parse
@@ -64,10 +56,8 @@ rule token = parse
                                                 c (Lexing.lexeme_start lexbuf))) }
 
 {
-  (* Single-word keywords. Words not in this list and not completing a phrase
-     below are identifiers. Deliberately closed and small: window-frame noise
-     (rows/range/preceding/...) lexes as identifiers, which is harmless for
-     passthrough. *)
+  (* Closed and small on purpose: window-frame words (rows/range/preceding)
+     lex as identifiers, which is harmless for passthrough. *)
   let keywords =
     [ "select"; "from"; "where"; "and"; "or"; "on"; "as"; "set"; "update"
     ; "delete"; "insert"; "into"; "values"; "returning"; "with"; "limit"
@@ -76,7 +66,6 @@ rule token = parse
     ; "default"; "references"; "filter"; "over"; "window"; "distinct"
     ; "recursive"; "desc"; "asc"; "collate"; "all" ]
 
-  (* Multi-word keyword phrases, matched greedily (longest first). *)
   let phrases =
     [ [ "insert"; "or"; "replace" ]
     ; [ "left"; "outer"; "join" ]
@@ -97,13 +86,12 @@ rule token = parse
     ; [ "union"; "all" ]
     ]
 
+  (* Longest first: phrases are matched greedily. *)
   let phrases =
     List.sort (fun a b -> compare (List.length b) (List.length a)) phrases
 
-  (* Each token carries its byte span in the source: (start, end) offsets.
-     Multi-word keywords span from the first word's start to the last word's
-     end. Spans let the skeleton emit passthrough statements as exact source
-     slices instead of re-rendered tokens. *)
+  (* Each token carries its (start, end) byte span; passthrough statements are
+     emitted as exact source slices from those spans, not re-rendered tokens. *)
   let assemble raws =
     let rec go toks acc =
       match toks with

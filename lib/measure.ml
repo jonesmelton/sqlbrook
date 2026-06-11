@@ -1,14 +1,5 @@
-(* Measure pass: compute the river column width for a statement.
-
-   River width = max byte-length of the left-column items. For DML that's the
-   clause keywords (`order by`, `returning`, `inner join`); for DDL it's the
-   longest column name (with glued comma), table name, or table-constraint
-   keyword. Insert statements anchor at the right edge of `into` instead.
-
-   Width is measured in bytes; non-ASCII identifiers will misalign visually
-   (accepted MVP limitation). *)
-
-(* River column width, in bytes, for a parsed statement. *)
+(* River width = max byte-length of the left-column items. Measured in bytes,
+   so non-ASCII identifiers misalign visually (accepted). *)
 let river_width (stmt : Skeleton.stmt) : int =
   match stmt with
   | Skeleton.Dml { clauses; _ } ->

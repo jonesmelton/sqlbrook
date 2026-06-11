@@ -81,7 +81,7 @@ let rec stmt_lines (stmt : Skeleton.stmt) : string list =
     List.rev !lines
   | Skeleton.CreateView { header; body } ->
     let r = Measure.river_width body in
-    (render_tokens header :: (pad (r - 2) ^ "as") :: stmt_lines body)
+    render_tokens header :: (pad (r - 2) ^ "as") :: stmt_lines body
   | Skeleton.Insert { verb; table; cols; vals; returning; semi } ->
     let r = Measure.river_width stmt in
     let lines = ref [] in

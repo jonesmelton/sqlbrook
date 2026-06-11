@@ -506,8 +506,8 @@ let%expect_test "emit: create table right-aligns names, glues leading commas" =
      content column on their own line; `) ;` straddles the river *)
   fmt
     "create table if not exists skills (char_name text not null, tree text not null, \
-     leaf text, ts datetime default current_timestamp, unique (char_name, tree, leaf) \
-     on conflict ignore);";
+     leaf text, ts datetime default current_timestamp, unique (char_name, tree, leaf) on \
+     conflict ignore);";
   [%expect
     {|
     create table if not exists
@@ -527,7 +527,8 @@ let%expect_test "emit: create table right-aligns names, glues leading commas" =
 
 let%expect_test "emit: table name wider than columns sets the river" =
   fmt
-    "create table if not exists world.flyable_npcs (full_name text, area text, note text);";
+    "create table if not exists world.flyable_npcs (full_name text, area text, note \
+     text);";
   [%expect
     {|
     create table if not exists

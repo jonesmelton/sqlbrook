@@ -150,8 +150,7 @@ let to_segments (toks : Token.t list) : (string * Token.t list) list =
     let close () = (kw, List.rev body) :: segs in
     match toks with
     | [] -> List.rev (close ())
-    | Token.Keyword k :: rest
-      when depth = 0 && cases = 0 && List.mem k clause_starters ->
+    | Token.Keyword k :: rest when depth = 0 && cases = 0 && List.mem k clause_starters ->
       go rest 0 false 0 k [] (close ())
     | Token.Keyword "case" :: rest when depth = 0 ->
       go rest 0 after_between (cases + 1) kw (Token.Keyword "case" :: body) segs
@@ -377,8 +376,15 @@ let comma_split (toks : Token.t list) : Token.t list list =
 (* Keywords that start a fresh continuation line inside a column def or table
    constraint (`not null`, `default ...`, `references ...`, `on conflict ...`). *)
 let ddl_break = function
-  | "not" | "default" | "references" | "collate" | "check" | "unique" | "primary key"
-  | "foreign key" | "on conflict" -> true
+  | "not"
+  | "default"
+  | "references"
+  | "collate"
+  | "check"
+  | "unique"
+  | "primary key"
+  | "foreign key"
+  | "on conflict" -> true
   | _ -> false
 ;;
 
@@ -421,8 +427,8 @@ let parse_create_table (toks : Token.t list) : stmt =
   in
   let header, rest =
     match toks with
-    | (Token.Keyword "create table" as t) :: (Token.Keyword "if not exists" as t2) :: rest ->
-      [ t; t2 ], rest
+    | (Token.Keyword "create table" as t) :: (Token.Keyword "if not exists" as t2) :: rest
+      -> [ t; t2 ], rest
     | (Token.Keyword "create table" as t) :: rest -> [ t ], rest
     | _ -> raise Unsupported
   in

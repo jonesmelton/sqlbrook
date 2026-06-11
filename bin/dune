@@ -1,6 +1,6 @@
 (executable
  (name main)
  (public_name sqlbrook)
- (libraries sqlbrook)
+ (libraries sqlbrook cmdliner)
  (flags
-  (:standard -w +a-4-70)))
+  (:standard -w +a-4-44-70)))

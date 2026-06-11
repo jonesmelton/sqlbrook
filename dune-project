@@ -12,4 +12,5 @@
  (depends
   (ocaml
    (>= 5.4))
+  cmdliner
   (ppx_expect :with-test)))

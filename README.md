@@ -11,9 +11,14 @@ byte-for-byte no-op.
 ## Usage
 
 ```sh
-sqlbrook file.sql ...   # format files, write to stdout
-sqlbrook < file.sql     # or read stdin
+sqlbrook file.sql ...     # format files, write to stdout
+sqlbrook < file.sql       # or read stdin
+sqlbrook -w file.sql ...  # rewrite files in place
+sqlbrook -o out.sql *.sql # concatenate formatted output to a file
+sqlbrook --check *.sql    # exit 1 if any file isn't already formatted (CI)
 ```
+
+Run `sqlbrook --help` for the full flag list and exit codes.
 
 Select statements are laid out in full; constructs the formatter does not yet
 handle (insert, update, CTEs, DDL) are emitted unchanged, with a warning on

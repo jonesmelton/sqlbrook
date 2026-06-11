@@ -1,12 +1,6 @@
 # sqlbrook
 
-A whole-statement SQL formatter for the "river" style: lowercase everything,
-clause keywords right-aligned to a common river column, leading commas, one
-expression per line. SQLite dialect only.
-
-The style is specified in [`sql-style.md`](sql-style.md). The conformed files
-under `examples/` are the spec's executable form — formatting them is a
-byte-for-byte no-op.
+A whole-statement SQL formatter for my personal variant of the "river" style: lowercase everything, clause keywords right-aligned to a common river column, leading commas, one expression per line. SQLite dialect only.
 
 ## Usage
 
@@ -24,10 +18,32 @@ Select statements are laid out in full; constructs the formatter does not yet
 handle (insert, update, CTEs, DDL) are emitted unchanged, with a warning on
 stderr.
 
+## Getting started
+
+Requires OCaml >= 5.4. From a fresh clone, create a local switch and pull in
+the dependencies:
+
+```sh
+opam switch create . 5.4.0 --no-install   # creates ./_opam
+opam install . --deps-only --with-test     # cmdliner, ppx_expect, etc.
+dune build
+```
+
+Run it directly through dune (note the `--` separating dune's args from the
+program's):
+
+```sh
+dune exec sqlbrook -- --help
+dune exec sqlbrook -- --check examples/lore.sql
+```
+
+Or invoke the built binary at `_build/default/bin/main.exe`, or `dune install`
+to put `sqlbrook` on your switch's PATH.
+
 ## Development
 
-Requires OCaml >= 5.4 and dune; `ppx_expect` for tests. The repo assumes a
-local opam switch (`_opam/`). Tasks run through [`just`](https://just.systems):
+Tasks run through [`just`](https://just.systems) (optional — each recipe is a
+thin wrapper over `dune`):
 
 | recipe | what it does |
 | --- | --- |

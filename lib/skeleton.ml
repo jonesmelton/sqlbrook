@@ -13,34 +13,10 @@ type clause =
   ; items : item list
   }
 
-type coldef =
-  { name : string
-  ; rest : Token.t list (* type + constraints, opaque *)
-  }
-
-(* CTE prologue in end-shield form: `with name ( cols ) as ( <body> )`. *)
-type cte =
-  { name : string
-  ; cols : string list
-  ; body : clause list
-  }
-
 type stmt =
   | Dml of
-      { cte : cte option
-      ; clauses : clause list
+      { clauses : clause list
       ; semi : bool
-      }
-  | Insert of
-      { verb : string list
-      ; table : string
-      ; cols : string list option
-      ; values : item list
-      ; tail : clause list
-      }
-  | Ddl of
-      { table : string
-      ; defs : coldef list
       }
   | Passthrough of string
 
@@ -209,7 +185,7 @@ let parse_select (toks : Token.t list) : stmt =
       in
       { kw; items })
   in
-  Dml { cte = None; clauses; semi }
+  Dml { clauses; semi }
 ;;
 
 (* Plain selects become Dml; everything else is Passthrough (the source slice

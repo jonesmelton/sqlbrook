@@ -8,5 +8,4 @@ let river_width (stmt : Skeleton.stmt) : int =
       0
       clauses
   | Skeleton.Passthrough _ -> 0
-  | Skeleton.Insert _ | Skeleton.Ddl _ -> failwith "Measure.river_width: not implemented"
 ;;

@@ -30,7 +30,7 @@ let pad (n : int) : string = String.make (max 0 n) ' '
 let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
   match stmt with
   | Skeleton.Passthrough s -> Buffer.add_string buf s
-  | Skeleton.Dml { cte = None; clauses; semi } ->
+  | Skeleton.Dml { clauses; semi } ->
     let lines = ref [] in
     let line s = lines := s :: !lines in
     List.iter
@@ -48,8 +48,6 @@ let emit_stmt (buf : Buffer.t) (width : int) (stmt : Skeleton.stmt) : unit =
       clauses;
     if semi then line (pad (width + 1) ^ ";");
     Buffer.add_string buf (String.concat "\n" (List.rev !lines))
-  | Skeleton.Dml { cte = Some _; _ } | Skeleton.Insert _ | Skeleton.Ddl _ ->
-    failwith "Emit.emit_stmt: not implemented"
 ;;
 
 let render_stmt (stmt : Skeleton.stmt) : string =

@@ -1,8 +1,8 @@
 (library
  (name sqlbrook)
  (public_name sqlbrook)
- ; 4: wildcard matches over closed local types are fine. 70: no .mli exposed.
+ ; 4: wildcard matches over closed local types are fine.
  (flags
-  (:standard -w +a-4-70)))
+  (:standard -w +a-4)))
 
 (ocamllex lexer)
